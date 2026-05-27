@@ -654,7 +654,7 @@ function MonthlyComboChart({ data, lineDataKey, lineLabel, lineColor, lineValueF
 
 function AiAnalysisCard() {
   const [url, setUrl] = useState("");
-  const [clientName, setClientName] = useState("PagBank");
+  const [clientName, setClientName] = useState("Cliente X");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);

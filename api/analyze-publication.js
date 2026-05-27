@@ -13,6 +13,126 @@ function cleanText(text = "") {
     .trim();
 }
 
+function extractTextFromHtml(html, sourceUrl = "") {
+  const $ = cheerio.load(html);
+
+  $("script, style, nav, footer, header, iframe, noscript").remove();
+
+  const title =
+    cleanText($("h1").first().text()) ||
+    cleanText($("title").first().text());
+
+  const selectors = [
+    "article",
+    "main",
+    ".modal",
+    ".modal-body",
+    ".texto",
+    ".ver-texto",
+    ".clipping",
+    ".conteudo",
+    ".content",
+    ".materia",
+    ".noticia",
+    "#texto",
+    "#conteudo",
+    "body",
+  ];
+
+  const chunks = [];
+
+  for (const selector of selectors) {
+    $(selector).each((_, el) => {
+      const text = cleanText($(el).text());
+      if (text.length > 120) chunks.push(text);
+    });
+  }
+
+  const uniqueChunks = Array.from(new Set(chunks))
+    .sort((a, b) => b.length - a.length);
+
+  const body = uniqueChunks[0] || "";
+
+  return {
+    title,
+    body,
+    textLength: body.length,
+    preview: body.slice(0, 700),
+    sourceUrl,
+    extractionMethod: "html",
+  };
+}
+
+function findTextCandidateUrls(html, baseUrl) {
+  const $ = cheerio.load(html);
+  const candidates = new Set();
+
+  const keywords = [
+    "ver texto",
+    "texto",
+    "clipping",
+    "materia",
+    "matéria",
+    "detalhe",
+    "visualizar",
+    "noticia",
+    "notícia",
+  ];
+
+  $("a[href]").each((_, el) => {
+    const href = $(el).attr("href");
+    const label = cleanText($(el).text()).toLowerCase();
+    const raw = `${href || ""} ${label}`.toLowerCase();
+
+    if (keywords.some((keyword) => raw.includes(keyword))) {
+      try {
+        candidates.add(new URL(href, baseUrl).toString());
+      } catch {
+        // ignora href inválido
+      }
+    }
+  });
+
+  $("[onclick]").each((_, el) => {
+    const onclick = $(el).attr("onclick") || "";
+    const lower = onclick.toLowerCase();
+
+    if (keywords.some((keyword) => lower.includes(keyword))) {
+      const matches = onclick.match(/['"]([^'"]+\.(?:php|html|aspx|jsp)[^'"]*)['"]/gi) || [];
+
+      for (const match of matches) {
+        const cleaned = match.replace(/^['"]|['"]$/g, "");
+        try {
+          candidates.add(new URL(cleaned, baseUrl).toString());
+        } catch {
+          // ignora url inválida
+        }
+      }
+    }
+  });
+
+  const urlMatches = html.match(/(?:href|src)=["']([^"']+)["']/gi) || [];
+
+  for (const item of urlMatches) {
+    const cleaned = item
+      .replace(/^(href|src)=/i, "")
+      .replace(/^["']|["']$/g, "");
+
+    const lower = cleaned.toLowerCase();
+
+    if (keywords.some((keyword) => lower.includes(keyword))) {
+      try {
+        candidates.add(new URL(cleaned, baseUrl).toString());
+      } catch {
+        // ignora url inválida
+      }
+    }
+  }
+
+  return Array.from(candidates);
+}
+
+
 async function extractTextFromUrl(url) {
   const response = await fetch(url, {
     headers: {
@@ -25,28 +145,53 @@ async function extractTextFromUrl(url) {
   }
 
   const html = await response.text();
-  const $ = cheerio.load(html);
 
-  $("script, style, nav, footer, header, iframe, noscript").remove();
+  const firstExtraction = extractTextFromHtml(html, url);
 
-  const title =
-    cleanText($("h1").first().text()) ||
-    cleanText($("title").first().text());
+  if (firstExtraction.body && firstExtraction.body.length >= 200) {
+    return firstExtraction;
+  }
 
-  const paragraphs = [];
+  const candidates = findTextCandidateUrls(html, url);
 
-  $("article p, main p, .content p, .materia p, p").each((_, el) => {
-    const text = cleanText($(el).text());
-    if (text.length > 40) paragraphs.push(text);
-  });
+  for (const candidateUrl of candidates.slice(0, 8)) {
+    try {
+      const candidateResponse = await fetch(candidateUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; PRDashboardBot/1.0)",
+          Referer: url,
+        },
+      });
 
-  const body = paragraphs.join("\n\n");
+      if (!candidateResponse.ok) continue;
+
+      const candidateHtml = await candidateResponse.text();
+      const candidateExtraction = extractTextFromHtml(candidateHtml, candidateUrl);
+
+      if (candidateExtraction.body && candidateExtraction.body.length >= 200) {
+        return {
+          ...candidateExtraction,
+          sourceUrl: candidateUrl,
+          extractionMethod: "linked_candidate",
+          candidates,
+        };
+      }
+    } catch {
+      // Ignora candidato quebrado e tenta o próximo.
+    }
+  }
 
   return {
-    title,
-    body,
-    textLength: body.length,
-    preview: body.slice(0, 700),
+    ...firstExtraction,
+    extractionMethod: "insufficient_html",
+    candidates,
+    diagnostics: {
+      htmlLength: html.length,
+      hasVerTexto: /ver texto/i.test(html),
+      hasTexto: /texto/i.test(html),
+      hasIframe: /iframe/i.test(html),
+      hasModal: /modal/i.test(html),
+    },
   };
 }
 

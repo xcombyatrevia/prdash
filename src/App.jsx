@@ -658,21 +658,30 @@ function AiAnalysisCard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [rawApiResponse, setRawApiResponse] = useState("");
+  const [httpStatus, setHttpStatus] = useState("");
 
-  function stringifyForDebug(value) {
-    if (value === null || value === undefined) return "";
-    if (typeof value === "string") return value;
-    try {
-      return JSON.stringify(value, null, 2);
-    } catch {
-      return String(value);
-    }
-  }
+  const finalAiFactor = useMemo(() => {
+    const analysis = result?.analysis;
+    if (!analysis) return null;
+
+    const factors = [
+      analysis.presence?.factor,
+      analysis.highlight?.factor,
+      analysis.protagonism?.factor,
+      analysis.tone?.factor,
+    ].map((value) => Number(value));
+
+    if (factors.some((value) => Number.isNaN(value))) return null;
+    return factors.reduce((acc, value) => acc * value, 1);
+  }, [result]);
 
   async function analyze() {
     setLoading(true);
     setError("");
     setResult(null);
+    setRawApiResponse("");
+    setHttpStatus("");
 
     try {
       const response = await fetch("/api/analyze-publication", {
@@ -688,48 +697,39 @@ function AiAnalysisCard() {
         }),
       });
 
-      const rawApiText = await response.text();
-      let data;
+      setHttpStatus(`HTTP ${response.status} - ${response.ok ? "OK" : "erro"}`);
 
+      const responseText = await response.text();
+      setRawApiResponse(responseText);
+
+      let data;
       try {
-        data = rawApiText ? JSON.parse(rawApiText) : {};
-      } catch (jsonError) {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
         data = {
           error: "A API não retornou JSON válido.",
-          jsonError: jsonError.message,
-          rawApiText,
+          rawApiResponse: responseText,
         };
       }
 
-      const normalizedData = {
-        ...data,
-        apiStatus: response.status,
-        apiOk: response.ok,
-        rawApiText: data.rawApiText || rawApiText,
-      };
-
-      setResult(normalizedData);
+      setResult(data);
 
       if (!response.ok) {
-        const errorMessage =
-          typeof normalizedData.error === "string"
-            ? normalizedData.error
-            : normalizedData.message
-            ? String(normalizedData.message)
-            : `Erro HTTP ${response.status}`;
-        throw new Error(errorMessage);
+        const message =
+          typeof data?.error === "string"
+            ? data.error
+            : data?.error?.message || "Erro na análise.";
+        throw new Error(message);
       }
     } catch (err) {
-      setError(err.message || stringifyForDebug(err) || "Erro inesperado.");
+      setError(err.message || "Erro inesperado.");
     } finally {
       setLoading(false);
     }
   }
 
   const analysis = result?.analysis;
-  const debugPayload = result?.debug || result?.rawMessage || result?.choices || null;
-  const rawDeepSeekContent = result?.rawContent || result?.debug?.rawContent || result?.debug?.rawMessage?.content || "";
-  const rawApiText = result?.rawApiText || "";
+  const fullText = result?.fullExtractedText || result?.extraction?.fullExtractedText || "";
 
   return (
     <Card className="p-5">
@@ -774,9 +774,9 @@ function AiAnalysisCard() {
         </div>
       )}
 
-      {result?.apiStatus && (
-        <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-xs text-slate-400">
-          Status da API: HTTP {result.apiStatus} · {result.apiOk ? "OK" : "erro"}
+      {httpStatus && (
+        <div className="mt-4 rounded-xl border border-cyan-300/15 bg-cyan-300/5 px-4 py-3 text-xs text-cyan-100">
+          Status da API: {httpStatus}
         </div>
       )}
 
@@ -785,66 +785,99 @@ function AiAnalysisCard() {
           <p className="text-xs uppercase tracking-wide text-slate-500">Texto extraído</p>
           <p className="mt-2 font-medium text-slate-100">{result.extraction.title || "Sem título extraído"}</p>
           <p className="mt-2 text-xs text-slate-500">
-            {result.extraction.textLength} caracteres
-            {result.extraction.extractionMethod ? ` · método: ${result.extraction.extractionMethod}` : ""}
+            {result.extraction.textLength} caracteres · método: {result.extraction.extractionMethod || "não informado"}
           </p>
           <p className="mt-3 text-sm leading-relaxed text-slate-300">{result.extraction.preview}</p>
-        </div>
-      )}
 
-      {rawDeepSeekContent && (
-        <div className="mt-4 rounded-xl border border-red-300/20 bg-red-300/10 p-4">
-          <p className="text-xs uppercase tracking-wide text-red-200">Resposta bruta da DeepSeek</p>
-          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-red-50">
-            {stringifyForDebug(rawDeepSeekContent)}
-          </pre>
-        </div>
-      )}
-
-      {debugPayload && (
-        <div className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-300/10 p-4">
-          <p className="text-xs uppercase tracking-wide text-cyan-200">Debug da chamada DeepSeek</p>
-          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-cyan-50">
-            {stringifyForDebug(debugPayload)}
-          </pre>
-        </div>
-      )}
-
-      {rawApiText && !analysis && (
-        <div className="mt-4 rounded-xl border border-orange-300/20 bg-orange-300/10 p-4">
-          <p className="text-xs uppercase tracking-wide text-orange-200">Resposta bruta da API</p>
-          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-orange-50">
-            {rawApiText}
-          </pre>
+          {fullText && (
+            <details className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+              <summary className="cursor-pointer text-sm font-medium text-cyan-100">
+                Ver texto completo extraído ({fullText.length.toLocaleString("pt-BR")} caracteres)
+              </summary>
+              <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-slate-200">
+                {fullText}
+              </pre>
+            </details>
+          )}
         </div>
       )}
 
       {analysis && (
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-          {[
-            ["Presença", analysis.presence],
-            ["Destaque", analysis.highlight],
-            ["Protagonismo", analysis.protagonism],
-            ["Tom", analysis.tone],
-          ].map(([label, item]) => (
-            <div key={label} className="rounded-xl border border-white/10 bg-slate-950/50 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-              <p className="mt-2 text-lg font-semibold text-white">{item?.category}</p>
-              <p className="mt-1 text-sm text-cyan-200">Fator {item?.factor}</p>
-              <p className="mt-3 text-xs leading-relaxed text-slate-400">{item?.justification}</p>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+            {[
+              ["Presença", analysis.presence],
+              ["Destaque", analysis.highlight],
+              ["Protagonismo", analysis.protagonism],
+              ["Tom", analysis.tone],
+            ].map(([label, item]) => (
+              <div key={label} className="rounded-xl border border-white/10 bg-slate-950/50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+                <p className="mt-2 text-lg font-semibold text-white">{item?.category}</p>
+                <p className="mt-1 text-sm text-cyan-200">Fator {item?.factor}</p>
+                <p className="mt-3 text-xs leading-relaxed text-slate-400">{item?.justification}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+            <p className="text-xs uppercase tracking-wide text-emerald-100">Fator editorial final da IA</p>
+            <p className="mt-2 font-serif text-3xl text-white">
+              {finalAiFactor !== null
+                ? finalAiFactor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : "—"}
+            </p>
+            <p className="mt-2 text-sm text-emerald-50/80">
+              presença × destaque × protagonismo × tom
+            </p>
+          </div>
+        </>
       )}
 
       {analysis?.evidence?.length > 0 && (
         <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-4">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Evidências</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Evidências literais</p>
           <ul className="mt-2 space-y-2 text-sm text-slate-300">
             {analysis.evidence.map((item, index) => (
               <li key={`${item}-${index}`}>“{item}”</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {result?.rawContent && (
+        <div className="mt-4 rounded-xl border border-red-300/20 bg-red-300/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-red-200">Resposta bruta da DeepSeek</p>
+          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-red-50">
+            {result.rawContent}
+          </pre>
+        </div>
+      )}
+
+      {result?.debug && (
+        <div className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-300/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-cyan-200">Debug da chamada DeepSeek</p>
+          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-cyan-50">
+            {JSON.stringify(result.debug, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {result?.extraction?.diagnostics && (
+        <details className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-4">
+          <summary className="cursor-pointer text-sm font-medium text-slate-200">Diagnóstico da extração</summary>
+          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-slate-300">
+            {JSON.stringify(result.extraction.diagnostics, null, 2)}
+          </pre>
+        </details>
+      )}
+
+      {rawApiResponse && !result?.analysis && (
+        <div className="mt-4 rounded-xl border border-orange-300/20 bg-orange-300/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-orange-200">Resposta bruta da API</p>
+          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-orange-50">
+            {rawApiResponse}
+          </pre>
         </div>
       )}
     </Card>

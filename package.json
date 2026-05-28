@@ -1,5 +1,5 @@
 {
-  "name": "nilit-dashboard",
+  "name": "prdash",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -9,17 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@sparticuz/chromium": "latest",
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
+    "cheerio": "latest",
+    "framer-motion": "latest",
+    "lucide-react": "latest",
+    "openai": "latest",
+    "playwright-core": "latest",
     "react": "latest",
     "react-dom": "latest",
     "recharts": "latest",
-    "lucide-react": "latest",
-    "framer-motion": "latest",
-    "openai": "latest",
-    "cheerio": "latest"
-    "playwright-core": "latest",
-    "@sparticuz/chromium": "latest"
+    "vite": "latest"
   },
   "devDependencies": {}
 }

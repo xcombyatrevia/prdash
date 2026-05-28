@@ -388,6 +388,32 @@ function parseModelJson(content = "") {
   return JSON.parse(candidate);
 }
 
+function parseModelJson(content = "") {
+  const raw = String(content || "").trim();
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // tenta extrair JSON de dentro de markdown/texto
+  }
+
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+
+  if (!jsonMatch) {
+    throw new Error("Nenhum objeto JSON encontrado na resposta.");
+  }
+
+  let candidate = jsonMatch[0]
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
+
+  // Remove vírgulas sobrando antes de } ou ]
+  candidate = candidate.replace(/,\s*([}\]])/g, "$1");
+
+  return JSON.parse(candidate);
+}
+
 
 
 export default async function handler(req, res) {
@@ -439,12 +465,28 @@ ${extracted.body.slice(0, 18000)}
       max_tokens: 1200,
     });
 
-    const content = completion.choices?.[0]?.message?.content;
+    const rawMessage = completion.choices?.[0]?.message || null;
+    const content = rawMessage?.content || "";
     
     if (!content) {
       return res.status(502).json({
         error: "A DeepSeek retornou conteúdo vazio.",
-        rawCompletion: completion,
+        debug: {
+          rawMessage,
+          choices: completion.choices || [],
+          usage: completion.usage || null,
+          model: completion.model || null,
+          id: completion.id || null,
+          created: completion.created || null,
+        },
+        extraction: {
+          title: extracted.title,
+          textLength: extracted.textLength,
+          preview: extracted.preview,
+          sourceUrl: extracted.sourceUrl,
+          extractionMethod: extracted.extractionMethod,
+          diagnostics: extracted.diagnostics,
+        },
       });
     }
     
@@ -454,9 +496,25 @@ ${extracted.body.slice(0, 18000)}
       analysis = parseModelJson(content);
     } catch (jsonError) {
       return res.status(502).json({
-        error: "A DeepSeek não retornou JSON válido.",
+        error: "A DeepSeek retornou uma mensagem, mas ela não é JSON válido.",
         jsonError: jsonError.message,
         rawContent: content,
+        debug: {
+          rawMessage,
+          choices: completion.choices || [],
+          usage: completion.usage || null,
+          model: completion.model || null,
+          id: completion.id || null,
+          created: completion.created || null,
+        },
+        extraction: {
+          title: extracted.title,
+          textLength: extracted.textLength,
+          preview: extracted.preview,
+          sourceUrl: extracted.sourceUrl,
+          extractionMethod: extracted.extractionMethod,
+          diagnostics: extracted.diagnostics,
+        },
       });
     }
     
@@ -471,6 +529,11 @@ ${extracted.body.slice(0, 18000)}
         diagnostics: extracted.diagnostics,
       },
       analysis,
+      debug: {
+        rawContent: content,
+        usage: completion.usage || null,
+        model: completion.model || null,
+      },
     });
 
 

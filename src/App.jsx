@@ -680,11 +680,12 @@ function AiAnalysisCard() {
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || "Erro na análise.");
-      }
-
+    if (!response.ok) {
       setResult(data);
+      throw new Error(data.error || "Erro na análise.");
+    }
+    
+    setResult(data);
     } catch (err) {
       setError(err.message || "Erro inesperado.");
     } finally {

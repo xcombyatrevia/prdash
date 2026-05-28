@@ -455,7 +455,7 @@ ${extracted.body.slice(0, 18000)}
 `;
 
     const completion = await deepseek.chat.completions.create({
-      model: "deepseek-v4-pro",
+      model: "deepseek-chat",
       messages: [
         { role: "system", content: buildSystemPrompt() },
         { role: "user", content: userPrompt },

@@ -659,11 +659,13 @@ function AiAnalysisCard() {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
 
-  function tryParseJson(text) {
+  function stringifyForDebug(value) {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "string") return value;
     try {
-      return JSON.parse(text);
+      return JSON.stringify(value, null, 2);
     } catch {
-      return null;
+      return String(value);
     }
   }
 
@@ -677,7 +679,6 @@ function AiAnalysisCard() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Accept: "application/json, text/plain, */*",
         },
         body: JSON.stringify({
           url,
@@ -687,44 +688,48 @@ function AiAnalysisCard() {
         }),
       });
 
-      const responseText = await response.text();
-      const parsedData = tryParseJson(responseText);
+      const rawApiText = await response.text();
+      let data;
 
-      const data =
-        parsedData ||
-        {
-          error: response.ok
-            ? "A API respondeu, mas não retornou JSON válido."
-            : "A API retornou uma resposta que não é JSON.",
-          rawResponseText: responseText,
-          apiStatus: response.status,
-          apiStatusText: response.statusText,
+      try {
+        data = rawApiText ? JSON.parse(rawApiText) : {};
+      } catch (jsonError) {
+        data = {
+          error: "A API não retornou JSON válido.",
+          jsonError: jsonError.message,
+          rawApiText,
         };
-
-      if (!response.ok) {
-        setResult({
-          ...data,
-          rawResponseText: data.rawResponseText || responseText,
-          apiStatus: response.status,
-          apiStatusText: response.statusText,
-        });
-        throw new Error(data.error || `Erro HTTP ${response.status}`);
       }
 
-      setResult({
+      const normalizedData = {
         ...data,
-        rawResponseText: responseText,
         apiStatus: response.status,
-        apiStatusText: response.statusText,
-      });
+        apiOk: response.ok,
+        rawApiText: data.rawApiText || rawApiText,
+      };
+
+      setResult(normalizedData);
+
+      if (!response.ok) {
+        const errorMessage =
+          typeof normalizedData.error === "string"
+            ? normalizedData.error
+            : normalizedData.message
+            ? String(normalizedData.message)
+            : `Erro HTTP ${response.status}`;
+        throw new Error(errorMessage);
+      }
     } catch (err) {
-      setError(err.message || "Erro inesperado.");
+      setError(err.message || stringifyForDebug(err) || "Erro inesperado.");
     } finally {
       setLoading(false);
     }
   }
 
   const analysis = result?.analysis;
+  const debugPayload = result?.debug || result?.rawMessage || result?.choices || null;
+  const rawDeepSeekContent = result?.rawContent || result?.debug?.rawContent || result?.debug?.rawMessage?.content || "";
+  const rawApiText = result?.rawApiText || "";
 
   return (
     <Card className="p-5">
@@ -769,19 +774,48 @@ function AiAnalysisCard() {
         </div>
       )}
 
+      {result?.apiStatus && (
+        <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-xs text-slate-400">
+          Status da API: HTTP {result.apiStatus} · {result.apiOk ? "OK" : "erro"}
+        </div>
+      )}
+
       {result?.extraction && (
         <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Texto extraído</p>
-            {result.extraction.extractionMethod && (
-              <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[11px] text-cyan-100">
-                {result.extraction.extractionMethod}
-              </span>
-            )}
-          </div>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Texto extraído</p>
           <p className="mt-2 font-medium text-slate-100">{result.extraction.title || "Sem título extraído"}</p>
-          <p className="mt-2 text-xs text-slate-500">{result.extraction.textLength} caracteres</p>
+          <p className="mt-2 text-xs text-slate-500">
+            {result.extraction.textLength} caracteres
+            {result.extraction.extractionMethod ? ` · método: ${result.extraction.extractionMethod}` : ""}
+          </p>
           <p className="mt-3 text-sm leading-relaxed text-slate-300">{result.extraction.preview}</p>
+        </div>
+      )}
+
+      {rawDeepSeekContent && (
+        <div className="mt-4 rounded-xl border border-red-300/20 bg-red-300/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-red-200">Resposta bruta da DeepSeek</p>
+          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-red-50">
+            {stringifyForDebug(rawDeepSeekContent)}
+          </pre>
+        </div>
+      )}
+
+      {debugPayload && (
+        <div className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-300/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-cyan-200">Debug da chamada DeepSeek</p>
+          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-cyan-50">
+            {stringifyForDebug(debugPayload)}
+          </pre>
+        </div>
+      )}
+
+      {rawApiText && !analysis && (
+        <div className="mt-4 rounded-xl border border-orange-300/20 bg-orange-300/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-orange-200">Resposta bruta da API</p>
+          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-orange-50">
+            {rawApiText}
+          </pre>
         </div>
       )}
 
@@ -811,42 +845,6 @@ function AiAnalysisCard() {
               <li key={`${item}-${index}`}>“{item}”</li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {result?.rawContent && (
-        <div className="mt-4 rounded-xl border border-red-300/20 bg-red-300/10 p-4">
-          <p className="text-xs uppercase tracking-wide text-red-200">
-            Resposta bruta da DeepSeek
-          </p>
-          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-red-50">
-            {result.rawContent}
-          </pre>
-        </div>
-      )}
-
-      {result?.debug && (
-        <div className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-300/10 p-4">
-          <p className="text-xs uppercase tracking-wide text-cyan-200">
-            Debug da chamada DeepSeek
-          </p>
-          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-cyan-50">
-            {JSON.stringify(result.debug, null, 2)}
-          </pre>
-        </div>
-      )}
-
-      {result?.rawResponseText && !result?.rawContent && (
-        <div className="mt-4 rounded-xl border border-orange-300/20 bg-orange-300/10 p-4">
-          <p className="text-xs uppercase tracking-wide text-orange-100">
-            Resposta bruta da API
-          </p>
-          <p className="mt-2 text-xs text-orange-100/80">
-            HTTP {result.apiStatus || "—"} {result.apiStatusText || ""}
-          </p>
-          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-orange-50">
-            {result.rawResponseText}
-          </pre>
         </div>
       )}
     </Card>

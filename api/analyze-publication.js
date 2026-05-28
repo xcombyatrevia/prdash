@@ -1,7 +1,5 @@
 import OpenAI from "openai";
 import * as cheerio from "cheerio";
-import chromium from "@sparticuz/chromium";
-import { chromium as playwrightChromium } from "playwright-core";
 
 const deepseek = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY,
@@ -11,27 +9,48 @@ const deepseek = new OpenAI({
 function cleanText(text = "") {
   return String(text)
     .replace(/\u00a0/g, " ")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n\s+\n/g, "\n\n")
-    .trim();
-}
-
-function cleanArticleText(text = "") {
-  let cleaned = String(text || "")
     .replace(/\r/g, "\n")
-    .replace(/\u00a0/g, " ")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
 
-  // Corta comentários e rodapé da página quando aparecem dentro do modal.
+function stripHtml(value = "") {
+  return cleanText(
+    String(value)
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<\/div>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+  );
+}
+
+function decodeHtmlEntities(text = "") {
+  return String(text)
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+}
+
+function cleanArticleText(text = "") {
+  let cleaned = decodeHtmlEntities(cleanText(text));
+
   const cutMarkers = [
     "Deixe seu comentário",
     "O autor da mensagem",
     "Leia as Regras de Uso",
+    "Retorno de mídia",
+    "Unique visitors",
+    "Audiência online",
     "Sobre a Sinopress",
     "Privacidade",
     "Fale com a Sinopress",
+    "Ajuda",
+    "Sair(",
+    "Sair (",
   ];
 
   for (const marker of cutMarkers) {
@@ -42,45 +61,70 @@ function cleanArticleText(text = "") {
   }
 
   const noisePatterns = [
-    /^Suas decisões baseadas em dados.*$/i,
-    /^Sair\s*\(\d+\).*$/i,
-    /^Ver fonte$/i,
-    /^Sentimento$/i,
-    /^Retorno de mídia.*$/i,
-    /^Unique visitors.*$/i,
-    /^Audiência online.*$/i,
-    /^Sobre a Sinopress.*$/i,
-    /^Privacidade.*$/i,
-    /^Ajuda$/i,
+    /^suas decisões baseadas em dados/i,
+    /^ver fonte$/i,
     /^ver texto$/i,
+    /^sentimento$/i,
+    /^retorno de mídia/i,
+    /^unique visitors/i,
+    /^audiência online/i,
+    /^sobre a sinopress/i,
+    /^privacidade/i,
+    /^ajuda$/i,
+    /^sair\s*\(\d+\)/i,
   ];
 
-  const lines = cleaned
+  return cleaned
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
-    .filter((line) => !noisePatterns.some((pattern) => pattern.test(line)));
-
-  return lines.join("\n").trim();
+    .filter((line) => !noisePatterns.some((pattern) => pattern.test(line)))
+    .join("\n")
+    .trim();
 }
 
-function extractTextFromHtml(html, sourceUrl = "") {
-  const $ = cheerio.load(html);
+function scoreTextCandidate(text = "") {
+  const lower = text.toLowerCase();
+  let score = 0;
 
-  $("script, style, nav, footer, header, iframe, noscript").remove();
+  if (text.length > 500) score += 10;
+  if (text.length > 1200) score += 10;
+  if (lower.includes("do uol")) score += 6;
+  if (lower.includes("em são paulo")) score += 5;
+  if (lower.includes("imagem:")) score += 4;
+  if (lower.includes("pagbank")) score += 4;
+  if (lower.includes("lucro")) score += 3;
+  if (lower.includes("reportagem")) score += 2;
+  if (lower.includes("retorno de mídia")) score -= 8;
+  if (lower.includes("unique visitors")) score -= 8;
+  if (lower.includes("sobre a sinopress")) score -= 8;
+  if (lower.includes("suas decisões baseadas")) score -= 6;
+
+  return score;
+}
+
+function extractCandidateTextsFromHtml(html) {
+  const $ = cheerio.load(html, { decodeEntities: true });
+
+  const candidates = [];
 
   const title =
     cleanText($("h1").first().text()) ||
     cleanText($("title").first().text());
 
   const selectors = [
-    ".modal.show",
+    ".modal",
     ".modal-content",
     ".modal-body",
     "[role='dialog']",
     "#texto",
     "#conteudo",
+    "#textoMateria",
+    "#texto_materia",
+    "#materia",
     ".texto",
+    ".textoMateria",
+    ".texto_materia",
     ".conteudo",
     ".content",
     ".materia",
@@ -90,191 +134,336 @@ function extractTextFromHtml(html, sourceUrl = "") {
     "body",
   ];
 
-  const chunks = [];
-
   for (const selector of selectors) {
     $(selector).each((_, el) => {
-      const text = cleanArticleText($(el).text());
-      if (text.length > 120) chunks.push(text);
+      const raw = $(el).text();
+      const text = cleanArticleText(raw);
+
+      if (text.length > 120) {
+        candidates.push({
+          source: `selector:${selector}`,
+          text,
+          length: text.length,
+          score: scoreTextCandidate(text),
+        });
+      }
     });
   }
 
-  const uniqueChunks = Array.from(new Set(chunks)).sort(
-    (a, b) => b.length - a.length
-  );
+  $("[data-texto], [data-content], [data-conteudo], [data-materia], [data-original-title], [title]").each((_, el) => {
+    const attrs = el.attribs || {};
 
-  const body = uniqueChunks[0] || "";
+    for (const [name, value] of Object.entries(attrs)) {
+      if (!value) continue;
+
+      const attrName = String(name).toLowerCase();
+      const rawValue = String(value);
+
+      if (
+        attrName.includes("texto") ||
+        attrName.includes("content") ||
+        attrName.includes("conteudo") ||
+        attrName.includes("materia") ||
+        rawValue.toLowerCase().includes("pagbank") ||
+        rawValue.toLowerCase().includes("do uol")
+      ) {
+        const text = cleanArticleText(stripHtml(rawValue));
+
+        if (text.length > 120) {
+          candidates.push({
+            source: `attribute:${name}`,
+            text,
+            length: text.length,
+            score: scoreTextCandidate(text),
+          });
+        }
+      }
+    }
+  });
+
+  $("script").each((index, el) => {
+    const scriptText = $(el).html() || "";
+
+    if (
+      /pagbank/i.test(scriptText) ||
+      /do uol/i.test(scriptText) ||
+      /ver texto/i.test(scriptText) ||
+      /clipping/i.test(scriptText)
+    ) {
+      const extractedFromStrings = extractLongStringsFromScript(scriptText);
+
+      for (const item of extractedFromStrings) {
+        const text = cleanArticleText(stripHtml(item));
+
+        if (text.length > 120) {
+          candidates.push({
+            source: `script:${index}`,
+            text,
+            length: text.length,
+            score: scoreTextCandidate(text),
+          });
+        }
+      }
+    }
+  });
+
+  const unique = [];
+  const seen = new Set();
+
+  for (const candidate of candidates) {
+    const key = candidate.text.slice(0, 250);
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(candidate);
+    }
+  }
+
+  unique.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return b.length - a.length;
+  });
 
   return {
     title,
-    body,
-    textLength: body.length,
-    preview: body.slice(0, 700),
-    sourceUrl,
-    extractionMethod: "html",
+    candidates: unique,
   };
 }
 
-async function extractTextWithBrowser(url) {
-  let browser;
+function extractLongStringsFromScript(scriptText = "") {
+  const results = [];
+  const regexes = [
+    /"([^"]{120,})"/g,
+    /'([^']{120,})'/g,
+    /`([^`]{120,})`/g,
+  ];
 
-  try {
-    browser = await playwrightChromium.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-    });
+  for (const regex of regexes) {
+    let match;
+    while ((match = regex.exec(scriptText)) !== null) {
+      const value = match[1];
 
-    const page = await browser.newPage({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-      viewport: {
-        width: 1366,
-        height: 900,
-      },
-    });
-
-    await page.goto(url, {
-      waitUntil: "networkidle",
-      timeout: 30000,
-    });
-
-    // Tenta clicar no botão/link "ver texto".
-    const clickSelectors = [
-      "text=/ver texto/i",
-      "text=/Ver texto/i",
-      "text=/VER TEXTO/i",
-      "button:has-text('ver texto')",
-      "a:has-text('ver texto')",
-    ];
-
-    let clicked = false;
-
-    for (const selector of clickSelectors) {
-      try {
-        const locator = page.locator(selector).first();
-        await locator.click({ timeout: 5000 });
-        clicked = true;
-        break;
-      } catch {
-        // tenta o próximo seletor
+      if (
+        /pagbank/i.test(value) ||
+        /do uol/i.test(value) ||
+        /lucro/i.test(value) ||
+        /reportagem/i.test(value)
+      ) {
+        results.push(value);
       }
     }
-
-    if (!clicked) {
-      // Fallback: procura qualquer elemento visível cujo texto contenha "ver texto".
-      await page.evaluate(() => {
-        const elements = Array.from(document.querySelectorAll("a, button, div, span"));
-        const target = elements.find((el) =>
-          String(el.innerText || "").toLowerCase().includes("ver texto")
-        );
-        if (target) target.click();
-      });
-    }
-
-    await page.waitForTimeout(1500);
-
-    const result = await page.evaluate(() => {
-      function visibleText(el) {
-        if (!el) return "";
-        const style = window.getComputedStyle(el);
-        if (
-          style.display === "none" ||
-          style.visibility === "hidden" ||
-          style.opacity === "0"
-        ) {
-          return "";
-        }
-        return el.innerText || "";
-      }
-
-      const title =
-        document.querySelector("h1")?.innerText ||
-        document.querySelector("title")?.innerText ||
-        "";
-
-      const candidates = [
-        ...Array.from(document.querySelectorAll(".modal.show")),
-        ...Array.from(document.querySelectorAll(".modal-content")),
-        ...Array.from(document.querySelectorAll(".modal-body")),
-        ...Array.from(document.querySelectorAll("[role='dialog']")),
-        ...Array.from(document.querySelectorAll(".bootbox")),
-        ...Array.from(document.querySelectorAll(".swal2-container")),
-        document.body,
-      ]
-        .filter(Boolean)
-        .map((el) => ({
-          text: visibleText(el),
-          html: el.innerHTML || "",
-        }))
-        .filter((item) => item.text && item.text.length > 100)
-        .sort((a, b) => b.text.length - a.text.length);
-
-      return {
-        title,
-        text: candidates[0]?.text || "",
-        html: candidates[0]?.html || "",
-        candidateCount: candidates.length,
-      };
-    });
-
-    const body = cleanArticleText(result.text);
-
-    return {
-      title: cleanText(result.title),
-      body,
-      textLength: body.length,
-      preview: body.slice(0, 700),
-      sourceUrl: url,
-      extractionMethod: clicked ? "browser_click_ver_texto" : "browser_fallback",
-      diagnostics: {
-        candidateCount: result.candidateCount,
-        clicked,
-      },
-    };
-  } finally {
-    if (browser) await browser.close();
   }
+
+  return results;
 }
 
-async function extractTextFromUrl(url) {
+function findCandidateUrls(html, baseUrl) {
+  const $ = cheerio.load(html);
+  const candidates = new Set();
+
+  const keywords = [
+    "ver texto",
+    "texto",
+    "clipping",
+    "materia",
+    "matéria",
+    "noticia",
+    "notícia",
+    "detalhe",
+    "visualizar",
+    "conteudo",
+    "conteúdo",
+  ];
+
+  $("a[href], iframe[src], frame[src]").each((_, el) => {
+    const href = $(el).attr("href") || $(el).attr("src");
+    const label = cleanText($(el).text()).toLowerCase();
+    const raw = `${href || ""} ${label}`.toLowerCase();
+
+    if (href && keywords.some((keyword) => raw.includes(keyword))) {
+      try {
+        candidates.add(new URL(href, baseUrl).toString());
+      } catch {
+        // ignora URL inválida
+      }
+    }
+  });
+
+  $("[onclick]").each((_, el) => {
+    const onclick = $(el).attr("onclick") || "";
+    const lower = onclick.toLowerCase();
+
+    if (keywords.some((keyword) => lower.includes(keyword)) || lower.includes("clip")) {
+      const urls = extractUrlsFromText(onclick, baseUrl);
+      urls.forEach((url) => candidates.add(url));
+    }
+  });
+
+  $("script").each((_, el) => {
+    const scriptText = $(el).html() || "";
+    const lower = scriptText.toLowerCase();
+
+    if (keywords.some((keyword) => lower.includes(keyword)) || lower.includes("clip")) {
+      const urls = extractUrlsFromText(scriptText, baseUrl);
+      urls.forEach((url) => candidates.add(url));
+    }
+  });
+
+  return Array.from(candidates).filter((url) => {
+    try {
+      const parsed = new URL(url);
+      return parsed.hostname.includes("sinopress") || parsed.hostname === new URL(baseUrl).hostname;
+    } catch {
+      return false;
+    }
+  });
+}
+
+function extractUrlsFromText(text = "", baseUrl) {
+  const urls = new Set();
+
+  const patterns = [
+    /(?:href|src)\s*=\s*["']([^"']+)["']/gi,
+    /["']([^"']+\.(?:php|html|aspx|jsp)(?:\?[^"']*)?)["']/gi,
+    /["']((?:\/|\.\/|\.\.\/)[^"']*(?:texto|clipping|materia|noticia|detalhe|conteudo)[^"']*)["']/gi,
+    /(https?:\/\/[^\s"'<>]+(?:texto|clipping|materia|noticia|detalhe|conteudo)[^\s"'<>]*)/gi,
+  ];
+
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const candidate = match[1] || match[0];
+
+      try {
+        urls.add(new URL(candidate, baseUrl).toString());
+      } catch {
+        // ignora
+      }
+    }
+  }
+
+  return Array.from(urls);
+}
+
+async function fetchText(url, referer = "") {
   const response = await fetch(url, {
     headers: {
       "User-Agent": "Mozilla/5.0 (compatible; PRDashboardBot/1.0)",
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      Referer: referer || url,
     },
   });
 
-  if (!response.ok) {
-    throw new Error(`Erro ao acessar o link: HTTP ${response.status}`);
+  const text = await response.text();
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    url,
+    text,
+    contentType: response.headers.get("content-type") || "",
+  };
+}
+
+async function extractTextFromUrl(url) {
+  const initial = await fetchText(url);
+  if (!initial.ok) {
+    throw new Error(`Erro ao acessar o link: HTTP ${initial.status}`);
   }
 
-  const html = await response.text();
-  const firstExtraction = extractTextFromHtml(html, url);
+  const initialExtraction = extractCandidateTextsFromHtml(initial.text);
+  const candidateUrls = findCandidateUrls(initial.text, url);
 
-  // Para Sinopress, o texto bom costuma estar atrás do clique "ver texto".
-  const shouldUseBrowser =
-    firstExtraction.body.length < 1200 ||
-    /sinopress/i.test(url) ||
-    /ver texto/i.test(html) ||
-    /Retorno de mídia/i.test(firstExtraction.body);
+  const attempts = [
+    {
+      url,
+      status: initial.status,
+      contentType: initial.contentType,
+      method: "initial_html",
+      candidateCount: initialExtraction.candidates.length,
+      topCandidateLength: initialExtraction.candidates[0]?.length || 0,
+      topCandidateScore: initialExtraction.candidates[0]?.score || 0,
+    },
+  ];
 
-  if (shouldUseBrowser) {
+  const allCandidates = [...initialExtraction.candidates];
+
+  for (const candidateUrl of candidateUrls.slice(0, 12)) {
     try {
-      const browserExtraction = await extractTextWithBrowser(url);
+      const fetched = await fetchText(candidateUrl, url);
 
-      if (browserExtraction.body && browserExtraction.body.length >= 200) {
-        return browserExtraction;
-      }
+      attempts.push({
+        url: candidateUrl,
+        status: fetched.status,
+        contentType: fetched.contentType,
+        method: "candidate_url",
+      });
+
+      if (!fetched.ok) continue;
+
+      const extraction = extractCandidateTextsFromHtml(fetched.text);
+
+      attempts[attempts.length - 1].candidateCount = extraction.candidates.length;
+      attempts[attempts.length - 1].topCandidateLength = extraction.candidates[0]?.length || 0;
+      attempts[attempts.length - 1].topCandidateScore = extraction.candidates[0]?.score || 0;
+
+      allCandidates.push(...extraction.candidates.map((candidate) => ({
+        ...candidate,
+        source: `${candidate.source} | url:${candidateUrl}`,
+      })));
     } catch (error) {
-      return {
-        ...firstExtraction,
-        extractionMethod: "html_browser_failed",
-        browserError: error.message,
-      };
+      attempts.push({
+        url: candidateUrl,
+        method: "candidate_url",
+        error: error.message,
+      });
     }
   }
 
-  return firstExtraction;
+  allCandidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return b.length - a.length;
+  });
+
+  const best = allCandidates[0];
+
+  const debug = {
+    htmlLength: initial.text.length,
+    hasVerTexto: /ver texto/i.test(initial.text),
+    hasPagBank: /pagbank/i.test(initial.text),
+    hasDoUol: /do uol/i.test(initial.text),
+    hasLucro: /lucro/i.test(initial.text),
+    hasModal: /modal/i.test(initial.text),
+    candidateUrls,
+    attempts,
+    topCandidates: allCandidates.slice(0, 5).map((candidate) => ({
+      source: candidate.source,
+      length: candidate.length,
+      score: candidate.score,
+      preview: candidate.text.slice(0, 500),
+    })),
+  };
+
+  if (!best) {
+    return {
+      title: initialExtraction.title,
+      body: "",
+      textLength: 0,
+      preview: "",
+      sourceUrl: url,
+      extractionMethod: "no_candidate_found",
+      diagnostics: debug,
+    };
+  }
+
+  return {
+    title: initialExtraction.title,
+    body: best.text,
+    textLength: best.text.length,
+    preview: best.text.slice(0, 1000),
+    sourceUrl: url,
+    extractionMethod: best.source,
+    diagnostics: debug,
+  };
 }
 
 function buildSystemPrompt() {
@@ -361,14 +550,13 @@ Critérios:
 `;
 }
 
-
 function parseModelJson(content = "") {
   const raw = String(content || "").trim();
 
   try {
     return JSON.parse(raw);
   } catch {
-    // continua para tentativa de extração
+    // tenta extrair JSON de markdown/texto
   }
 
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -382,51 +570,23 @@ function parseModelJson(content = "") {
     .replace(/```/g, "")
     .trim();
 
-  // Remove vírgulas sobrando antes de } ou ]
   candidate = candidate.replace(/,\s*([}\]])/g, "$1");
 
   return JSON.parse(candidate);
 }
-
-function parseModelJson(content = "") {
-  const raw = String(content || "").trim();
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    // tenta extrair JSON de dentro de markdown/texto
-  }
-
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-
-  if (!jsonMatch) {
-    throw new Error("Nenhum objeto JSON encontrado na resposta.");
-  }
-
-  let candidate = jsonMatch[0]
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
-    .trim();
-
-  // Remove vírgulas sobrando antes de } ou ]
-  candidate = candidate.replace(/,\s*([}\]])/g, "$1");
-
-  return JSON.parse(candidate);
-}
-
-
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Use POST." });
-  }
-
   try {
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Use POST." });
+    }
+
     const {
       url,
       clientName = "Cliente X",
       title = "",
       vehicle = "",
+      debug = false,
     } = req.body || {};
 
     if (!url) {
@@ -435,12 +595,34 @@ export default async function handler(req, res) {
 
     const extracted = await extractTextFromUrl(url);
 
+    if (debug) {
+      return res.status(200).json({
+        status: "debug_only",
+        extraction: {
+          title: extracted.title,
+          textLength: extracted.textLength,
+          preview: extracted.preview,
+          sourceUrl: extracted.sourceUrl,
+          extractionMethod: extracted.extractionMethod,
+          diagnostics: extracted.diagnostics,
+        },
+        fullExtractedText: extracted.body,
+      });
+    }
+
     if (!extracted.body || extracted.body.length < 200) {
       return res.status(422).json({
         status: "conteudo_insuficiente",
         error:
-          "Não foi possível extrair texto suficiente. A página pode depender de sessão, iframe, imagem ou JavaScript não acessível.",
-        extraction: extracted,
+          "Não foi possível extrair texto suficiente do link. Veja diagnostics para entender se o texto está em endpoint, script, iframe, imagem ou sessão.",
+        extraction: {
+          title: extracted.title,
+          textLength: extracted.textLength,
+          preview: extracted.preview,
+          sourceUrl: extracted.sourceUrl,
+          extractionMethod: extracted.extractionMethod,
+          diagnostics: extracted.diagnostics,
+        },
       });
     }
 
@@ -463,11 +645,12 @@ ${extracted.body.slice(0, 18000)}
       response_format: { type: "json_object" },
       stream: false,
       max_tokens: 1200,
+      temperature: 0.1,
     });
 
     const rawMessage = completion.choices?.[0]?.message || null;
     const content = rawMessage?.content || "";
-    
+
     if (!content) {
       return res.status(502).json({
         error: "A DeepSeek retornou conteúdo vazio.",
@@ -489,9 +672,9 @@ ${extracted.body.slice(0, 18000)}
         },
       });
     }
-    
+
     let analysis;
-    
+
     try {
       analysis = parseModelJson(content);
     } catch (jsonError) {
@@ -517,7 +700,7 @@ ${extracted.body.slice(0, 18000)}
         },
       });
     }
-    
+
     return res.status(200).json({
       status: "ok",
       extraction: {
@@ -535,11 +718,10 @@ ${extracted.body.slice(0, 18000)}
         model: completion.model || null,
       },
     });
-
-
   } catch (error) {
     return res.status(500).json({
-      error: error.message || "Erro inesperado.",
+      error: error.message || "Erro inesperado na função.",
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 }

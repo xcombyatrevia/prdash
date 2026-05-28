@@ -288,6 +288,11 @@ Sua tarefa é avaliar uma reportagem e classificar quatro critérios editoriais 
 4. tom
 
 Responda exclusivamente em JSON válido.
+Não use markdown.
+Não use comentários.
+Não use texto antes ou depois do JSON.
+Não use trailing commas.
+Todas as propriedades precisam estar entre aspas duplas.
 
 Use exatamente este formato:
 
@@ -356,6 +361,35 @@ Critérios:
 `;
 }
 
+
+function parseModelJson(content = "") {
+  const raw = String(content || "").trim();
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // continua para tentativa de extração
+  }
+
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+
+  if (!jsonMatch) {
+    throw new Error("Nenhum objeto JSON encontrado na resposta.");
+  }
+
+  let candidate = jsonMatch[0]
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
+
+  // Remove vírgulas sobrando antes de } ou ]
+  candidate = candidate.replace(/,\s*([}\]])/g, "$1");
+
+  return JSON.parse(candidate);
+}
+
+
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Use POST." });
@@ -406,15 +440,26 @@ ${extracted.body.slice(0, 18000)}
     });
 
     const content = completion.choices?.[0]?.message?.content;
-
+    
     if (!content) {
       return res.status(502).json({
         error: "A DeepSeek retornou conteúdo vazio.",
+        rawCompletion: completion,
       });
     }
-
-    const analysis = JSON.parse(content);
-
+    
+    let analysis;
+    
+    try {
+      analysis = parseModelJson(content);
+    } catch (jsonError) {
+      return res.status(502).json({
+        error: "A DeepSeek não retornou JSON válido.",
+        jsonError: jsonError.message,
+        rawContent: content,
+      });
+    }
+    
     return res.status(200).json({
       status: "ok",
       extraction: {
@@ -427,6 +472,8 @@ ${extracted.body.slice(0, 18000)}
       },
       analysis,
     });
+
+
   } catch (error) {
     return res.status(500).json({
       error: error.message || "Erro inesperado.",

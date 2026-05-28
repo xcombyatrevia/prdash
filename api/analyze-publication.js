@@ -297,7 +297,7 @@ export default async function handler(req, res) {
       return res.status(422).json({
         status: "conteudo_insuficiente",
         error:
-          "Não foi possível extrair texto suficiente. Pode ser imagem, paywall, bloqueio ou página da clipadora sem texto no HTML.",
+          "Não foi possível extrair texto suficiente. A página pode depender de clique em 'Ver texto', iframe, sessão ou JavaScript.",
         extraction: extracted,
       });
     }

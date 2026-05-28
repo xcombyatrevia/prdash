@@ -738,6 +738,28 @@ function AiAnalysisCard() {
         </div>
       )}
 
+      {result?.rawContent && (
+        <div className="mt-4 rounded-xl border border-red-300/20 bg-red-300/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-red-200">
+            Resposta bruta da DeepSeek
+          </p>
+          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-red-50">
+            {result.rawContent}
+          </pre>
+        </div>
+      )}
+
+      {result?.debug && (
+        <div className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-300/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-cyan-200">
+            Debug da chamada DeepSeek
+          </p>
+          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-cyan-50">
+            {JSON.stringify(result.debug, null, 2)}
+          </pre>
+        </div>
+      )}
+
       {result?.extraction && (
         <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-4">
           <p className="text-xs uppercase tracking-wide text-slate-500">Texto extraído</p>

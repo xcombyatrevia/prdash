@@ -18,6 +18,8 @@
     "framer-motion": "latest",
     "openai": "latest",
     "cheerio": "latest"
+    "playwright-core": "latest",
+    "@sparticuz/chromium": "latest"
   },
   "devDependencies": {}
 }

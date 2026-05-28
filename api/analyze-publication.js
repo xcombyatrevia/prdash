@@ -31,6 +31,7 @@ function decodeHtmlEntities(text = "") {
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
     .replace(/&#039;/gi, "'")
+    .replace(/&apos;/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">");
 }
@@ -89,18 +90,51 @@ function scoreTextCandidate(text = "") {
 
   if (text.length > 500) score += 10;
   if (text.length > 1200) score += 10;
+  if (text.length > 1800) score += 6;
+
   if (lower.includes("do uol")) score += 6;
   if (lower.includes("em são paulo")) score += 5;
   if (lower.includes("imagem:")) score += 4;
   if (lower.includes("pagbank")) score += 4;
   if (lower.includes("lucro")) score += 3;
   if (lower.includes("reportagem")) score += 2;
+  if (lower.includes("portfolio de crédito") || lower.includes("portfólio de crédito")) score += 5;
+
   if (lower.includes("retorno de mídia")) score -= 8;
   if (lower.includes("unique visitors")) score -= 8;
   if (lower.includes("sobre a sinopress")) score -= 8;
   if (lower.includes("suas decisões baseadas")) score -= 6;
 
   return score;
+}
+
+function extractLongStringsFromScript(scriptText = "") {
+  const results = [];
+
+  const regexes = [
+    /"([^"]{120,})"/g,
+    /'([^']{120,})'/g,
+    /`([^`]{120,})`/g,
+  ];
+
+  for (const regex of regexes) {
+    let match;
+
+    while ((match = regex.exec(scriptText)) !== null) {
+      const value = match[1];
+
+      if (
+        /pagbank/i.test(value) ||
+        /do uol/i.test(value) ||
+        /lucro/i.test(value) ||
+        /reportagem/i.test(value)
+      ) {
+        results.push(value);
+      }
+    }
+  }
+
+  return results;
 }
 
 function extractCandidateTextsFromHtml(html) {
@@ -212,6 +246,7 @@ function extractCandidateTextsFromHtml(html) {
 
   for (const candidate of candidates) {
     const key = candidate.text.slice(0, 250);
+
     if (!seen.has(key)) {
       seen.add(key);
       unique.push(candidate);
@@ -229,31 +264,31 @@ function extractCandidateTextsFromHtml(html) {
   };
 }
 
-function extractLongStringsFromScript(scriptText = "") {
-  const results = [];
-  const regexes = [
-    /"([^"]{120,})"/g,
-    /'([^']{120,})'/g,
-    /`([^`]{120,})`/g,
+function extractUrlsFromText(text = "", baseUrl) {
+  const urls = new Set();
+
+  const patterns = [
+    /(?:href|src)\s*=\s*["']([^"']+)["']/gi,
+    /["']([^"']+\.(?:php|html|aspx|jsp)(?:\?[^"']*)?)["']/gi,
+    /["']((?:\/|\.\/|\.\.\/)[^"']*(?:texto|clipping|materia|noticia|detalhe|conteudo)[^"']*)["']/gi,
+    /(https?:\/\/[^\s"'<>]+(?:texto|clipping|materia|noticia|detalhe|conteudo)[^\s"'<>]*)/gi,
   ];
 
-  for (const regex of regexes) {
+  for (const pattern of patterns) {
     let match;
-    while ((match = regex.exec(scriptText)) !== null) {
-      const value = match[1];
 
-      if (
-        /pagbank/i.test(value) ||
-        /do uol/i.test(value) ||
-        /lucro/i.test(value) ||
-        /reportagem/i.test(value)
-      ) {
-        results.push(value);
+    while ((match = pattern.exec(text)) !== null) {
+      const candidate = match[1] || match[0];
+
+      try {
+        urls.add(new URL(candidate, baseUrl).toString());
+      } catch {
+        // ignora URL inválida
       }
     }
   }
 
-  return results;
+  return Array.from(urls);
 }
 
 function findCandidateUrls(html, baseUrl) {
@@ -318,32 +353,6 @@ function findCandidateUrls(html, baseUrl) {
   });
 }
 
-function extractUrlsFromText(text = "", baseUrl) {
-  const urls = new Set();
-
-  const patterns = [
-    /(?:href|src)\s*=\s*["']([^"']+)["']/gi,
-    /["']([^"']+\.(?:php|html|aspx|jsp)(?:\?[^"']*)?)["']/gi,
-    /["']((?:\/|\.\/|\.\.\/)[^"']*(?:texto|clipping|materia|noticia|detalhe|conteudo)[^"']*)["']/gi,
-    /(https?:\/\/[^\s"'<>]+(?:texto|clipping|materia|noticia|detalhe|conteudo)[^\s"'<>]*)/gi,
-  ];
-
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-      const candidate = match[1] || match[0];
-
-      try {
-        urls.add(new URL(candidate, baseUrl).toString());
-      } catch {
-        // ignora
-      }
-    }
-  }
-
-  return Array.from(urls);
-}
-
 async function fetchText(url, referer = "") {
   const response = await fetch(url, {
     headers: {
@@ -366,6 +375,7 @@ async function fetchText(url, referer = "") {
 
 async function extractTextFromUrl(url) {
   const initial = await fetchText(url);
+
   if (!initial.ok) {
     throw new Error(`Erro ao acessar o link: HTTP ${initial.status}`);
   }
@@ -406,10 +416,12 @@ async function extractTextFromUrl(url) {
       attempts[attempts.length - 1].topCandidateLength = extraction.candidates[0]?.length || 0;
       attempts[attempts.length - 1].topCandidateScore = extraction.candidates[0]?.score || 0;
 
-      allCandidates.push(...extraction.candidates.map((candidate) => ({
-        ...candidate,
-        source: `${candidate.source} | url:${candidateUrl}`,
-      })));
+      allCandidates.push(
+        ...extraction.candidates.map((candidate) => ({
+          ...candidate,
+          source: `${candidate.source} | url:${candidateUrl}`,
+        }))
+      );
     } catch (error) {
       attempts.push({
         url: candidateUrl,
@@ -545,7 +557,10 @@ Critérios:
 - Não seja generosa sem evidência.
 - Se o cliente só aparece em lista, use presença baixa ou menção incidental.
 - Se houver crise, reclamação, golpe, bloqueio, processo, condenação ou dano reputacional, o tom deve ser sensível ou negativo.
-- Use evidências curtas retiradas do texto.
+- Use evidências curtas copiadas literalmente do texto analisado.
+- As evidências devem ser trechos reais do texto, sem reescrever, resumir ou inventar.
+- Não use reticências internas nas evidências.
+- Se precisar encurtar uma evidência, escolha um trecho menor, mas literal.
 - confidence deve variar de 0 a 1.
 `;
 }
@@ -575,6 +590,31 @@ function parseModelJson(content = "") {
   return JSON.parse(candidate);
 }
 
+function calculateAiFinalFactor(analysis) {
+  if (!analysis) return null;
+
+  const presence = Number(analysis.presence?.factor ?? 0);
+  const highlight = Number(analysis.highlight?.factor ?? 0);
+  const protagonism = Number(analysis.protagonism?.factor ?? 0);
+  const tone = Number(analysis.tone?.factor ?? 0);
+
+  if (!presence || !highlight || !protagonism || !tone) return null;
+
+  return presence * highlight * protagonism * tone;
+}
+
+function buildExtractionPayload(extracted) {
+  return {
+    title: extracted.title,
+    textLength: extracted.textLength,
+    preview: extracted.preview,
+    fullText: extracted.body,
+    sourceUrl: extracted.sourceUrl,
+    extractionMethod: extracted.extractionMethod,
+    diagnostics: extracted.diagnostics,
+  };
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
@@ -598,14 +638,7 @@ export default async function handler(req, res) {
     if (debug) {
       return res.status(200).json({
         status: "debug_only",
-        extraction: {
-          title: extracted.title,
-          textLength: extracted.textLength,
-          preview: extracted.preview,
-          sourceUrl: extracted.sourceUrl,
-          extractionMethod: extracted.extractionMethod,
-          diagnostics: extracted.diagnostics,
-        },
+        extraction: buildExtractionPayload(extracted),
         fullExtractedText: extracted.body,
       });
     }
@@ -615,14 +648,7 @@ export default async function handler(req, res) {
         status: "conteudo_insuficiente",
         error:
           "Não foi possível extrair texto suficiente do link. Veja diagnostics para entender se o texto está em endpoint, script, iframe, imagem ou sessão.",
-        extraction: {
-          title: extracted.title,
-          textLength: extracted.textLength,
-          preview: extracted.preview,
-          sourceUrl: extracted.sourceUrl,
-          extractionMethod: extracted.extractionMethod,
-          diagnostics: extracted.diagnostics,
-        },
+        extraction: buildExtractionPayload(extracted),
       });
     }
 
@@ -662,14 +688,7 @@ ${extracted.body.slice(0, 18000)}
           id: completion.id || null,
           created: completion.created || null,
         },
-        extraction: {
-          title: extracted.title,
-          textLength: extracted.textLength,
-          preview: extracted.preview,
-          sourceUrl: extracted.sourceUrl,
-          extractionMethod: extracted.extractionMethod,
-          diagnostics: extracted.diagnostics,
-        },
+        extraction: buildExtractionPayload(extracted),
       });
     }
 
@@ -690,32 +709,22 @@ ${extracted.body.slice(0, 18000)}
           id: completion.id || null,
           created: completion.created || null,
         },
-        extraction: {
-          title: extracted.title,
-          textLength: extracted.textLength,
-          preview: extracted.preview,
-          sourceUrl: extracted.sourceUrl,
-          extractionMethod: extracted.extractionMethod,
-          diagnostics: extracted.diagnostics,
-        },
+        extraction: buildExtractionPayload(extracted),
       });
     }
 
+    const aiFinalFactor = calculateAiFinalFactor(analysis);
+
     return res.status(200).json({
       status: "ok",
-      extraction: {
-        title: extracted.title,
-        textLength: extracted.textLength,
-        preview: extracted.preview,
-        sourceUrl: extracted.sourceUrl,
-        extractionMethod: extracted.extractionMethod,
-        diagnostics: extracted.diagnostics,
-      },
+      extraction: buildExtractionPayload(extracted),
       analysis,
+      aiFinalFactor,
       debug: {
         rawContent: content,
         usage: completion.usage || null,
         model: completion.model || null,
+        aiFinalFactor,
       },
     });
   } catch (error) {

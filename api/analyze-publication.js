@@ -62,9 +62,7 @@ function cleanArticleText(text = "") {
 
   for (const marker of cutMarkers) {
     const index = cleaned.toLowerCase().indexOf(marker.toLowerCase());
-    if (index > 0) {
-      cleaned = cleaned.slice(0, index).trim();
-    }
+    if (index > 0) cleaned = cleaned.slice(0, index).trim();
   }
 
   const noisePatterns = [
@@ -97,7 +95,6 @@ function scoreTextCandidate(text = "") {
   if (text.length > 500) score += 10;
   if (text.length > 1200) score += 10;
   if (text.length > 1800) score += 6;
-
   if (lower.includes("do uol")) score += 6;
   if (lower.includes("em são paulo")) score += 5;
   if (lower.includes("imagem:")) score += 4;
@@ -105,7 +102,6 @@ function scoreTextCandidate(text = "") {
   if (lower.includes("lucro")) score += 3;
   if (lower.includes("reportagem")) score += 2;
   if (lower.includes("portfolio de crédito") || lower.includes("portfólio de crédito")) score += 5;
-
   if (lower.includes("retorno de mídia")) score -= 8;
   if (lower.includes("unique visitors")) score -= 8;
   if (lower.includes("sobre a sinopress")) score -= 8;
@@ -116,24 +112,13 @@ function scoreTextCandidate(text = "") {
 
 function extractLongStringsFromScript(scriptText = "") {
   const results = [];
-  const regexes = [
-    /"([^"]{120,})"/g,
-    /'([^']{120,})'/g,
-    /`([^`]{120,})`/g,
-  ];
+  const regexes = [/"([^"]{120,})"/g, /'([^']{120,})'/g, /`([^`]{120,})`/g];
 
   for (const regex of regexes) {
     let match;
-
     while ((match = regex.exec(scriptText)) !== null) {
       const value = match[1];
-
-      if (
-        /pagbank/i.test(value) ||
-        /do uol/i.test(value) ||
-        /lucro/i.test(value) ||
-        /reportagem/i.test(value)
-      ) {
+      if (/pagbank/i.test(value) || /do uol/i.test(value) || /lucro/i.test(value) || /reportagem/i.test(value)) {
         results.push(value);
       }
     }
@@ -144,12 +129,9 @@ function extractLongStringsFromScript(scriptText = "") {
 
 function extractCandidateTextsFromHtml(html) {
   const $ = cheerio.load(html, { decodeEntities: true });
-
   const candidates = [];
 
-  const title =
-    cleanText($("h1").first().text()) ||
-    cleanText($("title").first().text());
+  const title = cleanText($("h1").first().text()) || cleanText($("title").first().text());
 
   const selectors = [
     ".modal",
@@ -175,16 +157,9 @@ function extractCandidateTextsFromHtml(html) {
 
   for (const selector of selectors) {
     $(selector).each((_, el) => {
-      const raw = $(el).text();
-      const text = cleanArticleText(raw);
-
+      const text = cleanArticleText($(el).text());
       if (text.length > 120) {
-        candidates.push({
-          source: `selector:${selector}`,
-          text,
-          length: text.length,
-          score: scoreTextCandidate(text),
-        });
+        candidates.push({ source: `selector:${selector}`, text, length: text.length, score: scoreTextCandidate(text) });
       }
     });
   }
@@ -194,7 +169,6 @@ function extractCandidateTextsFromHtml(html) {
 
     for (const [name, value] of Object.entries(attrs)) {
       if (!value) continue;
-
       const attrName = String(name).toLowerCase();
       const rawValue = String(value);
 
@@ -207,14 +181,8 @@ function extractCandidateTextsFromHtml(html) {
         rawValue.toLowerCase().includes("do uol")
       ) {
         const text = cleanArticleText(stripHtml(rawValue));
-
         if (text.length > 120) {
-          candidates.push({
-            source: `attribute:${name}`,
-            text,
-            length: text.length,
-            score: scoreTextCandidate(text),
-          });
+          candidates.push({ source: `attribute:${name}`, text, length: text.length, score: scoreTextCandidate(text) });
         }
       }
     }
@@ -222,25 +190,11 @@ function extractCandidateTextsFromHtml(html) {
 
   $("script").each((index, el) => {
     const scriptText = $(el).html() || "";
-
-    if (
-      /pagbank/i.test(scriptText) ||
-      /do uol/i.test(scriptText) ||
-      /ver texto/i.test(scriptText) ||
-      /clipping/i.test(scriptText)
-    ) {
-      const extractedFromStrings = extractLongStringsFromScript(scriptText);
-
-      for (const item of extractedFromStrings) {
+    if (/pagbank/i.test(scriptText) || /do uol/i.test(scriptText) || /ver texto/i.test(scriptText) || /clipping/i.test(scriptText)) {
+      for (const item of extractLongStringsFromScript(scriptText)) {
         const text = cleanArticleText(stripHtml(item));
-
         if (text.length > 120) {
-          candidates.push({
-            source: `script:${index}`,
-            text,
-            length: text.length,
-            score: scoreTextCandidate(text),
-          });
+          candidates.push({ source: `script:${index}`, text, length: text.length, score: scoreTextCandidate(text) });
         }
       }
     }
@@ -248,25 +202,17 @@ function extractCandidateTextsFromHtml(html) {
 
   const unique = [];
   const seen = new Set();
-
   for (const candidate of candidates) {
     const key = candidate.text.slice(0, 250);
-
     if (!seen.has(key)) {
       seen.add(key);
       unique.push(candidate);
     }
   }
 
-  unique.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return b.length - a.length;
-  });
+  unique.sort((a, b) => (b.score !== a.score ? b.score - a.score : b.length - a.length));
 
-  return {
-    title,
-    candidates: unique,
-  };
+  return { title, candidates: unique };
 }
 
 function extractUrlsFromText(text = "", baseUrl) {
@@ -281,10 +227,8 @@ function extractUrlsFromText(text = "", baseUrl) {
 
   for (const pattern of patterns) {
     let match;
-
     while ((match = pattern.exec(text)) !== null) {
       const candidate = match[1] || match[0];
-
       try {
         urls.add(new URL(candidate, baseUrl).toString());
       } catch {
@@ -299,52 +243,32 @@ function extractUrlsFromText(text = "", baseUrl) {
 function findCandidateUrls(html, baseUrl) {
   const $ = cheerio.load(html);
   const candidates = new Set();
-
-  const keywords = [
-    "ver texto",
-    "texto",
-    "clipping",
-    "materia",
-    "matéria",
-    "noticia",
-    "notícia",
-    "detalhe",
-    "visualizar",
-    "conteudo",
-    "conteúdo",
-  ];
+  const keywords = ["ver texto", "texto", "clipping", "materia", "matéria", "noticia", "notícia", "detalhe", "visualizar", "conteudo", "conteúdo"];
 
   $("a[href], iframe[src], frame[src]").each((_, el) => {
     const href = $(el).attr("href") || $(el).attr("src");
     const label = cleanText($(el).text()).toLowerCase();
     const raw = `${href || ""} ${label}`.toLowerCase();
-
     if (href && keywords.some((keyword) => raw.includes(keyword))) {
       try {
         candidates.add(new URL(href, baseUrl).toString());
-      } catch {
-        // ignora URL inválida
-      }
+      } catch {}
     }
   });
 
   $("[onclick]").each((_, el) => {
     const onclick = $(el).attr("onclick") || "";
     const lower = onclick.toLowerCase();
-
     if (keywords.some((keyword) => lower.includes(keyword)) || lower.includes("clip")) {
-      const urls = extractUrlsFromText(onclick, baseUrl);
-      urls.forEach((candidateUrl) => candidates.add(candidateUrl));
+      extractUrlsFromText(onclick, baseUrl).forEach((candidateUrl) => candidates.add(candidateUrl));
     }
   });
 
   $("script").each((_, el) => {
     const scriptText = $(el).html() || "";
     const lower = scriptText.toLowerCase();
-
     if (keywords.some((keyword) => lower.includes(keyword)) || lower.includes("clip")) {
-      const urls = extractUrlsFromText(scriptText, baseUrl);
-      urls.forEach((candidateUrl) => candidates.add(candidateUrl));
+      extractUrlsFromText(scriptText, baseUrl).forEach((candidateUrl) => candidates.add(candidateUrl));
     }
   });
 
@@ -368,22 +292,12 @@ async function fetchText(url, referer = "") {
   });
 
   const text = await response.text();
-
-  return {
-    ok: response.ok,
-    status: response.status,
-    url,
-    text,
-    contentType: response.headers.get("content-type") || "",
-  };
+  return { ok: response.ok, status: response.status, url, text, contentType: response.headers.get("content-type") || "" };
 }
 
 async function extractTextFromUrl(url) {
   const initial = await fetchText(url);
-
-  if (!initial.ok) {
-    throw new Error(`Erro ao acessar o link: HTTP ${initial.status}`);
-  }
+  if (!initial.ok) throw new Error(`Erro ao acessar o link: HTTP ${initial.status}`);
 
   const initialExtraction = extractCandidateTextsFromHtml(initial.text);
   const candidateUrls = findCandidateUrls(initial.text, url);
@@ -405,45 +319,24 @@ async function extractTextFromUrl(url) {
   for (const candidateUrl of candidateUrls.slice(0, 12)) {
     try {
       const fetched = await fetchText(candidateUrl, url);
-
-      attempts.push({
-        url: candidateUrl,
-        status: fetched.status,
-        contentType: fetched.contentType,
-        method: "candidate_url",
-      });
-
+      attempts.push({ url: candidateUrl, status: fetched.status, contentType: fetched.contentType, method: "candidate_url" });
       if (!fetched.ok) continue;
 
       const extraction = extractCandidateTextsFromHtml(fetched.text);
-
       attempts[attempts.length - 1].candidateCount = extraction.candidates.length;
       attempts[attempts.length - 1].topCandidateLength = extraction.candidates[0]?.length || 0;
       attempts[attempts.length - 1].topCandidateScore = extraction.candidates[0]?.score || 0;
 
-      allCandidates.push(
-        ...extraction.candidates.map((candidate) => ({
-          ...candidate,
-          source: `${candidate.source} | url:${candidateUrl}`,
-        }))
-      );
+      allCandidates.push(...extraction.candidates.map((candidate) => ({ ...candidate, source: `${candidate.source} | url:${candidateUrl}` })));
     } catch (error) {
-      attempts.push({
-        url: candidateUrl,
-        method: "candidate_url",
-        error: error.message,
-      });
+      attempts.push({ url: candidateUrl, method: "candidate_url", error: error.message });
     }
   }
 
-  allCandidates.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return b.length - a.length;
-  });
-
+  allCandidates.sort((a, b) => (b.score !== a.score ? b.score - a.score : b.length - a.length));
   const best = allCandidates[0];
 
-  const debug = {
+  const diagnostics = {
     htmlLength: initial.text.length,
     hasVerTexto: /ver texto/i.test(initial.text),
     hasPagBank: /pagbank/i.test(initial.text),
@@ -461,15 +354,7 @@ async function extractTextFromUrl(url) {
   };
 
   if (!best) {
-    return {
-      title: initialExtraction.title,
-      body: "",
-      textLength: 0,
-      preview: "",
-      sourceUrl: url,
-      extractionMethod: "no_candidate_found",
-      diagnostics: debug,
-    };
+    return { title: initialExtraction.title, body: "", textLength: 0, preview: "", sourceUrl: url, extractionMethod: "no_candidate_found", diagnostics };
   }
 
   return {
@@ -479,7 +364,7 @@ async function extractTextFromUrl(url) {
     preview: best.text.slice(0, 1000),
     sourceUrl: url,
     extractionMethod: best.source,
-    diagnostics: debug,
+    diagnostics,
   };
 }
 
@@ -572,39 +457,25 @@ Critérios:
 
 function parseModelJson(content = "") {
   const raw = String(content || "").trim();
-
   try {
     return JSON.parse(raw);
-  } catch {
-    // tenta extrair JSON de markdown/texto
-  }
+  } catch {}
 
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Nenhum objeto JSON encontrado na resposta.");
 
-  if (!jsonMatch) {
-    throw new Error("Nenhum objeto JSON encontrado na resposta.");
-  }
-
-  let candidate = jsonMatch[0]
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
-    .trim();
-
+  let candidate = jsonMatch[0].replace(/```json/gi, "").replace(/```/g, "").trim();
   candidate = candidate.replace(/,\s*([}\]])/g, "$1");
-
   return JSON.parse(candidate);
 }
 
 function calculateAiFinalFactor(analysis) {
   if (!analysis) return null;
-
   const presence = Number(analysis.presence?.factor ?? 0);
   const highlight = Number(analysis.highlight?.factor ?? 0);
   const protagonism = Number(analysis.protagonism?.factor ?? 0);
   const tone = Number(analysis.tone?.factor ?? 0);
-
   if (!presence || !highlight || !protagonism || !tone) return null;
-
   return presence * highlight * protagonism * tone;
 }
 
@@ -678,106 +549,66 @@ function buildResponseFromSavedAnalysis(savedRow) {
 
 async function findSavedAnalysis({ url, publicationId }) {
   if (publicationId) {
-    const { data, error } = await supabase
-      .from("ai_analyses")
-      .select("*")
-      .eq("publication_id", publicationId)
-      .maybeSingle();
-
+    const { data, error } = await supabase.from("ai_analyses").select("*").eq("publication_id", publicationId).maybeSingle();
     if (error) throw new Error(`Erro ao consultar Supabase por publication_id: ${error.message}`);
     if (data) return data;
   }
 
-  const { data, error } = await supabase
-    .from("ai_analyses")
-    .select("*")
-    .eq("url", url)
-    .maybeSingle();
-
+  const { data, error } = await supabase.from("ai_analyses").select("*").eq("url", url).maybeSingle();
   if (error) throw new Error(`Erro ao consultar Supabase por URL: ${error.message}`);
-
   return data;
 }
 
-async function saveAnalysisToSupabase({
-  url,
-  clientId,
-  publicationId,
-  clientName,
-  title,
-  vehicle,
-  extracted,
-  analysis,
-  aiFinalFactor,
-  completion,
-  rawContent,
-}) {
+async function saveAnalysisToSupabase({ url, clientId, publicationId, clientName, title, vehicle, extracted, analysis, aiFinalFactor, completion, rawContent }) {
   const payload = {
     client_id: clientId || "cliente_x",
     publication_id: publicationId || null,
-
     client_name_snapshot: clientName || "Cliente X",
     title_snapshot: title || null,
     vehicle_snapshot: vehicle || null,
     url,
-
     extracted_title: extracted.title || null,
     extracted_text: extracted.body || null,
     extraction_method: extracted.extractionMethod || null,
     extraction_source_url: extracted.sourceUrl || url,
     text_length: extracted.textLength || 0,
-
     presence_category: analysis.presence?.category || null,
     presence_factor: analysis.presence?.factor ?? null,
-
     highlight_category: analysis.highlight?.category || null,
     highlight_factor: analysis.highlight?.factor ?? null,
-
     protagonism_category: analysis.protagonism?.category || null,
     protagonism_factor: analysis.protagonism?.factor ?? null,
-
     tone_category: analysis.tone?.category || null,
     tone_factor: analysis.tone?.factor ?? null,
-
     ai_final_factor: aiFinalFactor,
-
     presence_justification: analysis.presence?.justification || null,
     highlight_justification: analysis.highlight?.justification || null,
     protagonism_justification: analysis.protagonism?.justification || null,
     tone_justification: analysis.tone?.justification || null,
     evidence: analysis.evidence || [],
-
     confidence: analysis.confidence ?? null,
     status: analysis.status || "analisado_por_texto",
     model: completion.model || null,
     prompt_tokens: completion.usage?.prompt_tokens || null,
     completion_tokens: completion.usage?.completion_tokens || null,
     total_tokens: completion.usage?.total_tokens || null,
-
     raw_content: rawContent || null,
     diagnostics: extracted.diagnostics || null,
   };
 
   const { data, error } = await supabase
     .from("ai_analyses")
-    .upsert(payload, {
-      onConflict: publicationId ? "publication_id" : "url",
-    })
+    .upsert(payload, { onConflict: publicationId ? "publication_id" : "url" })
     .select("*")
     .single();
 
-  if (error) {
-    throw new Error(`Erro ao salvar análise no Supabase: ${error.message}`);
-  }
-
+  if (error) throw new Error(`Erro ao salvar análise no Supabase: ${error.message}`);
   return data;
 }
 
 export default async function handler(req, res) {
   try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Use POST." });
-    }
+    if (req.method !== "POST") return res.status(405).json({ error: "Use POST." });
 
     const {
       url,
@@ -790,33 +621,23 @@ export default async function handler(req, res) {
       forceReanalyze = false,
     } = req.body || {};
 
-    if (!url) {
-      return res.status(400).json({ error: "URL obrigatória." });
-    }
+    if (!url) return res.status(400).json({ error: "URL obrigatória." });
 
     if (!forceReanalyze && !debug) {
       const savedAnalysis = await findSavedAnalysis({ url, publicationId });
-
-      if (savedAnalysis) {
-        return res.status(200).json(buildResponseFromSavedAnalysis(savedAnalysis));
-      }
+      if (savedAnalysis) return res.status(200).json(buildResponseFromSavedAnalysis(savedAnalysis));
     }
 
     const extracted = await extractTextFromUrl(url);
 
     if (debug) {
-      return res.status(200).json({
-        status: "debug_only",
-        extraction: buildExtractionPayload(extracted),
-        fullExtractedText: extracted.body,
-      });
+      return res.status(200).json({ status: "debug_only", extraction: buildExtractionPayload(extracted), fullExtractedText: extracted.body });
     }
 
     if (!extracted.body || extracted.body.length < 200) {
       return res.status(422).json({
         status: "conteudo_insuficiente",
-        error:
-          "Não foi possível extrair texto suficiente do link. Veja diagnostics para entender se o texto está em endpoint, script, iframe, imagem ou sessão.",
+        error: "Não foi possível extrair texto suficiente do link. Veja diagnostics para entender se o texto está em endpoint, script, iframe, imagem ou sessão.",
         extraction: buildExtractionPayload(extracted),
       });
     }
@@ -862,7 +683,6 @@ ${extracted.body.slice(0, 18000)}
     }
 
     let analysis;
-
     try {
       analysis = parseModelJson(content);
     } catch (jsonError) {
@@ -885,21 +705,8 @@ ${extracted.body.slice(0, 18000)}
     const aiFinalFactor = calculateAiFinalFactor(analysis);
 
     let savedRow = null;
-
     try {
-      savedRow = await saveAnalysisToSupabase({
-        url,
-        clientId,
-        publicationId,
-        clientName,
-        title,
-        vehicle,
-        extracted,
-        analysis,
-        aiFinalFactor,
-        completion,
-        rawContent: content,
-      });
+      savedRow = await saveAnalysisToSupabase({ url, clientId, publicationId, clientName, title, vehicle, extracted, analysis, aiFinalFactor, completion, rawContent: content });
     } catch (saveError) {
       return res.status(200).json({
         status: "ok",

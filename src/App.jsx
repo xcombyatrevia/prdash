@@ -37,7 +37,7 @@ import {
   Wand2,
 } from "lucide-react";
 
-const SHEET_ID = "1A3MClI-fg6ElFxA4_HPprH4Xcfp4Iaaw";
+const SHEET_ID = "1wFL7LF1Q-GdsATZoACaTSl2SxCdVXZYPGN7veHYHBVY";
 const PUBLICATIONS_SHEET = "CLIENTEX";
 const MONTHLY_SHEET = "CLIENTEXMENSAIS";
 
@@ -271,15 +271,18 @@ function normalizePublication(row, index) {
 
   return {
     id: index + 1,
-    publicationId: getValue(row, [
-      "id_publicacao",
-      "ID Publicacao",
-      "ID Publicação",
-      "Id Publicacao",
-      "Id Publicação",
-      "publication_id",
-      "Publication ID",
-    ]),
+    publicationId:
+      String(
+        getValue(row, [
+          "id_publicacao",
+          "ID Publicacao",
+          "ID Publicação",
+          "Id Publicacao",
+          "Id Publicação",
+          "publication_id",
+          "Publication ID",
+        ]) || ""
+      ).trim() || `row_${index + 1}`,
     title:
       getValue(row, ["Título", "Titulo", "Nome", "Matéria", "Materia", "Chamada"]) ||
       `Publicação ${index + 1}`,
@@ -318,7 +321,7 @@ function normalizePublication(row, index) {
     uniqueVisitors: parseNumber(getValue(row, ["Unique Visitors", "UniqueVisitors", "Visitantes únicos", "Visitantes Unicos"])),
     audience: parseNumber(getValue(row, ["Audiência", "Audiencia", "Alcance", "Pessoas impactadas"])),
     tier: getValue(row, ["Tier"]) || "ND",
-    url: getValue(row, ["Link", "URL", "Url", "Link da matéria", "Link da Materia"]),
+    url: String(getValue(row, ["url", "URL", "Url", "Link", "Link da matéria", "Link da Materia"]) || "").trim(),
     raw: row,
   };
 }

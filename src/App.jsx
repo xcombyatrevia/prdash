@@ -37,11 +37,11 @@ import {
   Wand2,
 } from "lucide-react";
 
-const SHEET_ID = "1RBM6VjmVufmkvueq05wanBBoKMbExouW";
+const SHEET_ID = "1A3MClI-fg6ElFxA4_HPprH4Xcfp4Iaaw";
 const PUBLICATIONS_SHEET = "CLIENTEX";
 const MONTHLY_SHEET = "CLIENTEXMENSAIS";
 
-const VALUATION_SHEET_ID = "1DcmLM7TpOuc_5EJUkydhSMcVBMkKTTzg";
+const VALUATION_SHEET_ID = "1cZCdW-1In741SBo8ZjaJijy6GIXEJVAj";
 const VEHICLES_SHEET = "Veiculos";
 const RULES_SHEET = "Regras";
 
@@ -271,6 +271,15 @@ function normalizePublication(row, index) {
 
   return {
     id: index + 1,
+    publicationId: getValue(row, [
+      "id_publicacao",
+      "ID Publicacao",
+      "ID Publicação",
+      "Id Publicacao",
+      "Id Publicação",
+      "publication_id",
+      "Publication ID",
+    ]),
     title:
       getValue(row, ["Título", "Titulo", "Nome", "Matéria", "Materia", "Chamada"]) ||
       `Publicação ${index + 1}`,
@@ -652,14 +661,31 @@ function MonthlyComboChart({ data, lineDataKey, lineLabel, lineColor, lineValueF
   );
 }
 
-function AiAnalysisCard() {
+function AiAnalysisCard({ selectedPublication = null }) {
   const [url, setUrl] = useState("");
   const [clientName, setClientName] = useState("Cliente X");
+  const [publicationId, setPublicationId] = useState("");
+  const [publicationTitle, setPublicationTitle] = useState("");
+  const [publicationVehicle, setPublicationVehicle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [rawApiResponse, setRawApiResponse] = useState("");
   const [httpStatus, setHttpStatus] = useState("");
+
+  useEffect(() => {
+    if (!selectedPublication) return;
+
+    setUrl(selectedPublication.url || "");
+    setClientName("Cliente X");
+    setPublicationId(selectedPublication.publicationId || "");
+    setPublicationTitle(selectedPublication.title || "");
+    setPublicationVehicle(selectedPublication.vehicle || "");
+    setError("");
+    setResult(null);
+    setRawApiResponse("");
+    setHttpStatus("");
+  }, [selectedPublication]);
 
   const finalAiFactor = useMemo(() => {
     const analysis = result?.analysis;
@@ -691,9 +717,11 @@ function AiAnalysisCard() {
         },
         body: JSON.stringify({
           url,
+          clientId: "cliente_x",
+          publicationId,
           clientName,
-          title: "",
-          vehicle: "",
+          title: publicationTitle,
+          vehicle: publicationVehicle,
         }),
       });
 
@@ -729,7 +757,7 @@ function AiAnalysisCard() {
   }
 
   const analysis = result?.analysis;
-  const fullText = result?.fullExtractedText || result?.extraction?.fullExtractedText || "";
+  const fullText = result?.fullExtractedText || result?.extraction?.fullText || result?.extraction?.fullExtractedText || "";
 
   return (
     <Card className="p-5">
@@ -744,6 +772,18 @@ function AiAnalysisCard() {
           DeepSeek
         </span>
       </div>
+
+      {selectedPublication && (
+        <div className="mt-4 rounded-xl border border-violet-300/20 bg-violet-300/10 p-4">
+          <p className="text-xs uppercase tracking-wide text-violet-100">Publicação selecionada da tabela</p>
+          <p className="mt-2 font-medium text-white">{publicationTitle || "Sem título informado"}</p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs text-violet-50/80">
+            <span>Veículo: {publicationVehicle || "não informado"}</span>
+            <span>·</span>
+            <span>ID: {publicationId || "sem id_publicacao"}</span>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_180px_auto]">
         <input
@@ -884,7 +924,7 @@ function AiAnalysisCard() {
   );
 }
 
-function ValuationPublicationsCard({ rows }) {
+function ValuationPublicationsCard({ rows, onAnalyzePublication }) {
   return (
     <Card className="overflow-hidden p-5">
       <div className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-start md:justify-between">
@@ -908,6 +948,7 @@ function ValuationPublicationsCard({ rows }) {
               <th className="px-3 py-2 text-right font-medium">Valoração antiga</th>
               <th className="px-3 py-2 text-right font-medium">Nova valoração</th>
               <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 text-right font-medium">IA</th>
             </tr>
           </thead>
 
@@ -940,18 +981,30 @@ function ValuationPublicationsCard({ rows }) {
                   <p className="mt-1 text-xs text-slate-500">calculada pela regra nova</p>
                 </td>
 
-                <td className="rounded-r-xl border-y border-r border-white/10 px-3 py-3">
+                <td className="border-y border-white/10 px-3 py-3">
                   <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-xs text-amber-100">
                     {row.status}
                   </span>
                   <p className="mt-2 max-w-[280px] text-xs leading-relaxed text-slate-500">{row.detail}</p>
+                </td>
+
+                <td className="rounded-r-xl border-y border-r border-white/10 px-3 py-3 text-right">
+                  <button
+                    type="button"
+                    onClick={() => onAnalyzePublication?.(row)}
+                    disabled={!row.url}
+                    className="rounded-full border border-violet-300/25 bg-violet-300/10 px-3 py-1.5 text-xs font-medium text-violet-100 transition hover:bg-violet-300/15 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Analisar IA
+                  </button>
+                  {!row.url && <p className="mt-2 text-[11px] text-slate-500">sem link</p>}
                 </td>
               </tr>
             ))}
 
             {!rows.length && (
               <tr>
-                <td colSpan={5} className="rounded-xl border border-white/10 bg-slate-950/45 px-4 py-8 text-center text-slate-400">
+                <td colSpan={6} className="rounded-xl border border-white/10 bg-slate-950/45 px-4 py-8 text-center text-slate-400">
                   Nenhuma publicação encontrada para o período selecionado.
                 </td>
               </tr>
@@ -976,6 +1029,18 @@ export default function PRDashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [lastUpdated, setLastUpdated] = useState("dados estáticos iniciais");
+  const [selectedAiPublication, setSelectedAiPublication] = useState(null);
+
+  function handleAnalyzePublication(publication) {
+    setSelectedAiPublication(publication);
+
+    window.setTimeout(() => {
+      document.getElementById("ai-analysis-card")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  }
 
   async function loadData() {
     setIsLoading(true);
@@ -1239,12 +1304,12 @@ export default function PRDashboard() {
                 <PublicationsValuationCard />
               </section>
 
-              <section className="mt-4">
-                <AiAnalysisCard />
+              <section id="ai-analysis-card" className="mt-4 scroll-mt-6">
+                <AiAnalysisCard selectedPublication={selectedAiPublication} />
               </section>
 
               <section className="mt-4">
-                <ValuationPublicationsCard rows={valuationPublicationRows} />
+                <ValuationPublicationsCard rows={valuationPublicationRows} onAnalyzePublication={handleAnalyzePublication} />
               </section>
             </>
           ) : (

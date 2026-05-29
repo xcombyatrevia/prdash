@@ -1,10 +1,16 @@
 import OpenAI from "openai";
 import * as cheerio from "cheerio";
+import { createClient } from "@supabase/supabase-js";
 
 const deepseek = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY,
   baseURL: "https://api.deepseek.com",
 });
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 function cleanText(text = "") {
   return String(text)

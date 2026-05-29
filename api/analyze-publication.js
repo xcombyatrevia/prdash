@@ -116,7 +116,6 @@ function scoreTextCandidate(text = "") {
 
 function extractLongStringsFromScript(scriptText = "") {
   const results = [];
-
   const regexes = [
     /"([^"]{120,})"/g,
     /'([^']{120,})'/g,
@@ -335,7 +334,7 @@ function findCandidateUrls(html, baseUrl) {
 
     if (keywords.some((keyword) => lower.includes(keyword)) || lower.includes("clip")) {
       const urls = extractUrlsFromText(onclick, baseUrl);
-      urls.forEach((url) => candidates.add(url));
+      urls.forEach((candidateUrl) => candidates.add(candidateUrl));
     }
   });
 
@@ -345,13 +344,13 @@ function findCandidateUrls(html, baseUrl) {
 
     if (keywords.some((keyword) => lower.includes(keyword)) || lower.includes("clip")) {
       const urls = extractUrlsFromText(scriptText, baseUrl);
-      urls.forEach((url) => candidates.add(url));
+      urls.forEach((candidateUrl) => candidates.add(candidateUrl));
     }
   });
 
-  return Array.from(candidates).filter((url) => {
+  return Array.from(candidates).filter((candidateUrl) => {
     try {
-      const parsed = new URL(url);
+      const parsed = new URL(candidateUrl);
       return parsed.hostname.includes("sinopress") || parsed.hostname === new URL(baseUrl).hostname;
     } catch {
       return false;
@@ -621,6 +620,159 @@ function buildExtractionPayload(extracted) {
   };
 }
 
+function buildResponseFromSavedAnalysis(savedRow) {
+  const analysis = {
+    presence: {
+      category: savedRow.presence_category,
+      factor: Number(savedRow.presence_factor),
+      justification: savedRow.presence_justification,
+    },
+    highlight: {
+      category: savedRow.highlight_category,
+      factor: Number(savedRow.highlight_factor),
+      justification: savedRow.highlight_justification,
+    },
+    protagonism: {
+      category: savedRow.protagonism_category,
+      factor: Number(savedRow.protagonism_factor),
+      justification: savedRow.protagonism_justification,
+    },
+    tone: {
+      category: savedRow.tone_category,
+      factor: Number(savedRow.tone_factor),
+      justification: savedRow.tone_justification,
+    },
+    confidence: Number(savedRow.confidence),
+    evidence: savedRow.evidence || [],
+    status: savedRow.status,
+  };
+
+  return {
+    status: "ok",
+    source: "supabase_cache",
+    extraction: {
+      title: savedRow.extracted_title,
+      textLength: savedRow.text_length,
+      preview: String(savedRow.extracted_text || "").slice(0, 1000),
+      fullText: savedRow.extracted_text,
+      sourceUrl: savedRow.extraction_source_url,
+      extractionMethod: savedRow.extraction_method,
+      diagnostics: savedRow.diagnostics,
+    },
+    analysis,
+    aiFinalFactor: Number(savedRow.ai_final_factor),
+    debug: {
+      rawContent: savedRow.raw_content,
+      usage: {
+        prompt_tokens: savedRow.prompt_tokens,
+        completion_tokens: savedRow.completion_tokens,
+        total_tokens: savedRow.total_tokens,
+      },
+      model: savedRow.model,
+      aiFinalFactor: Number(savedRow.ai_final_factor),
+      cachedFromSupabase: true,
+      savedAt: savedRow.created_at,
+    },
+  };
+}
+
+async function findSavedAnalysis({ url, publicationId }) {
+  if (publicationId) {
+    const { data, error } = await supabase
+      .from("ai_analyses")
+      .select("*")
+      .eq("publication_id", publicationId)
+      .maybeSingle();
+
+    if (error) throw new Error(`Erro ao consultar Supabase por publication_id: ${error.message}`);
+    if (data) return data;
+  }
+
+  const { data, error } = await supabase
+    .from("ai_analyses")
+    .select("*")
+    .eq("url", url)
+    .maybeSingle();
+
+  if (error) throw new Error(`Erro ao consultar Supabase por URL: ${error.message}`);
+
+  return data;
+}
+
+async function saveAnalysisToSupabase({
+  url,
+  clientId,
+  publicationId,
+  clientName,
+  title,
+  vehicle,
+  extracted,
+  analysis,
+  aiFinalFactor,
+  completion,
+  rawContent,
+}) {
+  const payload = {
+    client_id: clientId || "cliente_x",
+    publication_id: publicationId || null,
+
+    client_name_snapshot: clientName || "Cliente X",
+    title_snapshot: title || null,
+    vehicle_snapshot: vehicle || null,
+    url,
+
+    extracted_title: extracted.title || null,
+    extracted_text: extracted.body || null,
+    extraction_method: extracted.extractionMethod || null,
+    extraction_source_url: extracted.sourceUrl || url,
+    text_length: extracted.textLength || 0,
+
+    presence_category: analysis.presence?.category || null,
+    presence_factor: analysis.presence?.factor ?? null,
+
+    highlight_category: analysis.highlight?.category || null,
+    highlight_factor: analysis.highlight?.factor ?? null,
+
+    protagonism_category: analysis.protagonism?.category || null,
+    protagonism_factor: analysis.protagonism?.factor ?? null,
+
+    tone_category: analysis.tone?.category || null,
+    tone_factor: analysis.tone?.factor ?? null,
+
+    ai_final_factor: aiFinalFactor,
+
+    presence_justification: analysis.presence?.justification || null,
+    highlight_justification: analysis.highlight?.justification || null,
+    protagonism_justification: analysis.protagonism?.justification || null,
+    tone_justification: analysis.tone?.justification || null,
+    evidence: analysis.evidence || [],
+
+    confidence: analysis.confidence ?? null,
+    status: analysis.status || "analisado_por_texto",
+    model: completion.model || null,
+    prompt_tokens: completion.usage?.prompt_tokens || null,
+    completion_tokens: completion.usage?.completion_tokens || null,
+    total_tokens: completion.usage?.total_tokens || null,
+
+    raw_content: rawContent || null,
+    diagnostics: extracted.diagnostics || null,
+  };
+
+  const { data, error } = await supabase
+    .from("ai_analyses")
+    .upsert(payload, {
+      onConflict: publicationId ? "publication_id" : "url",
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Erro ao salvar análise no Supabase: ${error.message}`);
+  }
+
+  return data;
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
@@ -629,14 +781,25 @@ export default async function handler(req, res) {
 
     const {
       url,
+      clientId = "cliente_x",
+      publicationId = "",
       clientName = "Cliente X",
       title = "",
       vehicle = "",
       debug = false,
+      forceReanalyze = false,
     } = req.body || {};
 
     if (!url) {
       return res.status(400).json({ error: "URL obrigatória." });
+    }
+
+    if (!forceReanalyze && !debug) {
+      const savedAnalysis = await findSavedAnalysis({ url, publicationId });
+
+      if (savedAnalysis) {
+        return res.status(200).json(buildResponseFromSavedAnalysis(savedAnalysis));
+      }
     }
 
     const extracted = await extractTextFromUrl(url);
@@ -721,8 +884,44 @@ ${extracted.body.slice(0, 18000)}
 
     const aiFinalFactor = calculateAiFinalFactor(analysis);
 
+    let savedRow = null;
+
+    try {
+      savedRow = await saveAnalysisToSupabase({
+        url,
+        clientId,
+        publicationId,
+        clientName,
+        title,
+        vehicle,
+        extracted,
+        analysis,
+        aiFinalFactor,
+        completion,
+        rawContent: content,
+      });
+    } catch (saveError) {
+      return res.status(200).json({
+        status: "ok",
+        source: "deepseek_unsaved",
+        warning: saveError.message,
+        extraction: buildExtractionPayload(extracted),
+        analysis,
+        aiFinalFactor,
+        debug: {
+          rawContent: content,
+          usage: completion.usage || null,
+          model: completion.model || null,
+          aiFinalFactor,
+          saved: false,
+        },
+      });
+    }
+
     return res.status(200).json({
       status: "ok",
+      source: "deepseek_saved",
+      savedAnalysisId: savedRow?.id,
       extraction: buildExtractionPayload(extracted),
       analysis,
       aiFinalFactor,
@@ -731,6 +930,8 @@ ${extracted.body.slice(0, 18000)}
         usage: completion.usage || null,
         model: completion.model || null,
         aiFinalFactor,
+        saved: true,
+        savedAnalysisId: savedRow?.id,
       },
     });
   } catch (error) {

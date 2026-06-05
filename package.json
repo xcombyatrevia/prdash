@@ -19,7 +19,8 @@
     "react": "latest",
     "react-dom": "latest",
     "recharts": "latest",
-    "@supabase/supabase-js": "latest",    
+    "@supabase/supabase-js": "latest",
+    "xlsx": "latest",
     "vite": "latest"
   },
   "devDependencies": {}

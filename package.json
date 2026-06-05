@@ -20,6 +20,7 @@
     "react-dom": "latest",
     "recharts": "latest",
     "@supabase/supabase-js": "latest",
+    "formidable": "latest",
     "xlsx": "latest",
     "vite": "latest"
   },

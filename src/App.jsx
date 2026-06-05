@@ -35,6 +35,10 @@ import {
   RefreshCw,
   AlertCircle,
   Wand2,
+  Database,
+  Upload,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 
 const SHEET_ID = "1wFL7LF1Q-GdsATZoACaTSl2SxCdVXZYPGN7veHYHBVY";
@@ -44,6 +48,14 @@ const MONTHLY_SHEET = "CLIENTEXMENSAIS";
 const VALUATION_SHEET_ID = "1cZCdW-1In741SBo8ZjaJijy6GIXEJVAj";
 const VEHICLES_SHEET = "Veiculos";
 const RULES_SHEET = "Regras";
+
+const CLIENT_OPTIONS = [
+  { id: "cliente_x", name: "Cliente X" },
+  { id: "cliente_y", name: "Cliente Y" },
+  { id: "cliente_z", name: "Cliente Z" },
+  { id: "cliente_u", name: "Cliente U" },
+  { id: "cliente_v", name: "Cliente V" },
+];
 
 const COLORS = ["#3758ff", "#05080f", "#c9d40b", "#70d6c9", "#facc15"];
 
@@ -559,6 +571,7 @@ const navItems = [
   [Layers, "Temas"],
   [BarChart3, "Benchmark"],
   [FileText, "Relatórios"],
+  [Database, "Gestão de Dados"],
   [Settings, "Configurações"],
 ];
 
@@ -1019,6 +1032,326 @@ function ValuationPublicationsCard({ rows, onAnalyzePublication }) {
   );
 }
 
+
+function DataManagementPage() {
+  const [selectedClientId, setSelectedClientId] = useState("cliente_x");
+  const [sheetName, setSheetName] = useState("CLIENTEX");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [validationResult, setValidationResult] = useState(null);
+  const [importResult, setImportResult] = useState(null);
+  const [error, setError] = useState("");
+  const [isValidating, setIsValidating] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const selectedClient = CLIENT_OPTIONS.find((client) => client.id === selectedClientId) || CLIENT_OPTIONS[0];
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || "");
+        resolve(result.includes(",") ? result.split(",")[1] : result);
+      };
+      reader.onerror = () => reject(new Error("Não foi possível ler o arquivo."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function requestUploadValidation(mode) {
+    if (!selectedFile) throw new Error("Selecione um arquivo .xlsx.");
+    if (!sheetName.trim()) throw new Error("Digite o nome da aba a ser carregada.");
+
+    const fileBase64 = await fileToBase64(selectedFile);
+    const payload = {
+      clientId: selectedClient.id,
+      clientName: selectedClient.name,
+      sheetName: sheetName.trim(),
+      fileName: selectedFile.name,
+      fileBase64,
+    };
+
+    const response = await fetch(mode === "import" ? "/api/import-publicacoes" : "/api/validate-publicacoes-upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: "A API não retornou JSON válido.", rawResponse: text };
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || data.message || "Erro no processamento do arquivo.");
+    }
+
+    return data;
+  }
+
+  async function validateFile() {
+    setError("");
+    setImportResult(null);
+    setValidationResult(null);
+    setIsValidating(true);
+
+    try {
+      const data = await requestUploadValidation("validate");
+      setValidationResult(data);
+    } catch (err) {
+      setError(err.message || "Erro ao validar arquivo.");
+    } finally {
+      setIsValidating(false);
+    }
+  }
+
+  async function confirmImport() {
+    setError("");
+    setIsImporting(true);
+
+    try {
+      const data = await requestUploadValidation("import");
+      setImportResult(data);
+    } catch (err) {
+      setError(err.message || "Erro ao importar arquivo.");
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
+  function cancelImport() {
+    setValidationResult(null);
+    setImportResult(null);
+    setSelectedFile(null);
+    setError("");
+  }
+
+  const summary = validationResult?.summary;
+  const importSummary = importResult?.summary;
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-5">
+        <div className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <SectionTitle>Gestão de Dados</SectionTitle>
+            <p className="mt-1 text-sm text-slate-400">
+              Importe planilhas de clipping para a base de publicações. Primeiro valide o arquivo; depois confirme a importação.
+            </p>
+          </div>
+          <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">
+            Supabase · publicacoes
+          </span>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[220px_220px_1fr_auto]">
+          <label className="text-sm text-slate-300">
+            Cliente
+            <select
+              value={selectedClientId}
+              onChange={(event) => setSelectedClientId(event.target.value)}
+              className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+            >
+              {CLIENT_OPTIONS.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-sm text-slate-300">
+            Nome da aba
+            <input
+              value={sheetName}
+              onChange={(event) => setSheetName(event.target.value)}
+              placeholder="CLIENTEX"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
+            />
+          </label>
+
+          <label className="text-sm text-slate-300">
+            Arquivo Excel
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+              className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 file:mr-4 file:rounded-lg file:border-0 file:bg-cyan-300/10 file:px-3 file:py-2 file:text-cyan-100"
+            />
+          </label>
+
+          <div className="flex items-end">
+            <button
+              onClick={validateFile}
+              disabled={isValidating || !selectedFile}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/15 disabled:opacity-50"
+            >
+              <Upload size={17} />
+              {isValidating ? "Validando..." : "Pré-validar"}
+            </button>
+          </div>
+        </div>
+
+        {selectedFile && (
+          <p className="mt-3 text-xs text-slate-500">
+            Arquivo selecionado: <span className="text-slate-300">{selectedFile.name}</span>
+          </p>
+        )}
+      </Card>
+
+      {error && (
+        <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
+          <AlertCircle className="mr-2 inline" size={18} />
+          {error}
+        </div>
+      )}
+
+      {summary && (
+        <Card className="p-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <SectionTitle>Resultado da pré-validação</SectionTitle>
+              <p className="mt-1 text-sm text-slate-400">
+                Nenhum dado foi salvo ainda. Confira o resumo antes de confirmar a importação.
+              </p>
+            </div>
+            <span className={`rounded-full border px-3 py-1 text-xs ${summary.rowsWithErrors ? "border-amber-300/20 bg-amber-300/10 text-amber-100" : "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"}`}>
+              {summary.rowsWithErrors ? "Com erros de linha" : "Pronto para importar"}
+            </span>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
+            {[
+              ["Linhas lidas", summary.totalRows],
+              ["Válidas", summary.validRows],
+              ["Vazias ignoradas", summary.ignoredEmptyRows],
+              ["Com alertas", summary.rowsWithWarnings],
+              ["Com erro", summary.rowsWithErrors],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+                <p className="mt-2 font-serif text-2xl text-white">{Number(value || 0).toLocaleString("pt-BR")}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Colunas reconhecidas</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(validationResult.columns?.recognized || []).map((column) => (
+                  <span key={column} className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-xs text-emerald-100">
+                    {column}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Alertas resumidos</p>
+              <div className="mt-3 space-y-2 text-sm text-slate-300">
+                {(validationResult.warningsSummary || []).length ? (
+                  validationResult.warningsSummary.map((item) => (
+                    <p key={item.field}>
+                      <span className="text-amber-200">{item.field}</span>: {item.count} linha(s)
+                    </p>
+                  ))
+                ) : (
+                  <p className="text-slate-500">Nenhum alerta relevante.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {(validationResult.errors || []).length > 0 && (
+            <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-4">
+              <p className="text-xs uppercase tracking-wide text-amber-100">Erros encontrados, primeiros exemplos</p>
+              <div className="mt-3 space-y-2 text-sm text-amber-50">
+                {validationResult.errors.slice(0, 20).map((item, index) => (
+                  <p key={`${item.row}-${item.field}-${index}`}>Linha {item.row}: {item.field} — {item.message}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-5 overflow-x-auto">
+            <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Prévia das primeiras linhas válidas</p>
+            <table className="w-full min-w-[900px] border-separate border-spacing-y-2 text-left text-sm">
+              <thead>
+                <tr className="text-xs uppercase tracking-wide text-slate-500">
+                  <th className="px-3 py-2">Linha</th>
+                  <th className="px-3 py-2">Título</th>
+                  <th className="px-3 py-2">Veículo</th>
+                  <th className="px-3 py-2">Data</th>
+                  <th className="px-3 py-2">Tipo</th>
+                  <th className="px-3 py-2">URL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(validationResult.preview || []).map((row) => (
+                  <tr key={row.linha_original} className="bg-slate-950/45">
+                    <td className="rounded-l-xl border-y border-l border-white/10 px-3 py-3 text-slate-400">{row.linha_original}</td>
+                    <td className="border-y border-white/10 px-3 py-3 text-slate-100">{row.titulo}</td>
+                    <td className="border-y border-white/10 px-3 py-3 text-slate-300">{row.veiculo}</td>
+                    <td className="border-y border-white/10 px-3 py-3 text-slate-300">{row.data_publicacao || "—"}</td>
+                    <td className="border-y border-white/10 px-3 py-3 text-slate-300">{row.tipo_midia || "—"}</td>
+                    <td className="rounded-r-xl border-y border-r border-white/10 px-3 py-3 text-xs text-slate-500">{row.url ? "com link" : "sem link"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-white/10 pt-4">
+            <button
+              onClick={cancelImport}
+              className="rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:bg-white/5"
+            >
+              Cancelar importação
+            </button>
+            <button
+              onClick={confirmImport}
+              disabled={isImporting || !validationResult}
+              className="flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-300/15 disabled:opacity-50"
+            >
+              <CheckCircle size={17} />
+              {isImporting ? "Importando..." : "Confirmar importação"}
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {importSummary && (
+        <Card className="p-5">
+          <div className="flex items-start gap-3">
+            <CheckCircle className="mt-1 text-emerald-300" size={22} />
+            <div>
+              <SectionTitle>Importação concluída</SectionTitle>
+              <p className="mt-1 text-sm text-slate-400">Os dados válidos foram gravados na tabela publicacoes.</p>
+            </div>
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
+            {[
+              ["Importadas", importSummary.importedRows],
+              ["Atualizadas", importSummary.updatedRows],
+              ["Ignoradas", importSummary.skippedRows],
+              ["Com erro", importSummary.rowsWithErrors],
+              ["Importação", importResult.importId || "—"],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+                <p className="mt-2 text-lg text-white">{typeof value === "number" ? value.toLocaleString("pt-BR") : value}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function PRDashboard() {
   const defaultDateRange = useMemo(() => getPreviousMonthRange(), []);
 
@@ -1300,7 +1633,9 @@ export default function PRDashboard() {
             </div>
           )}
 
-          {activePage === "Valorações" ? (
+          {activePage === "Gestão de Dados" ? (
+            <DataManagementPage />
+          ) : activePage === "Valorações" ? (
             <>
               <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <ValuationMonthlyCard />

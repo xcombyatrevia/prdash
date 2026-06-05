@@ -1045,51 +1045,57 @@ function DataManagementPage() {
 
   const selectedClient = CLIENT_OPTIONS.find((client) => client.id === selectedClientId) || CLIENT_OPTIONS[0];
 
-  function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = String(reader.result || "");
-        resolve(result.includes(",") ? result.split(",")[1] : result);
-      };
-      reader.onerror = () => reject(new Error("Não foi possível ler o arquivo."));
-      reader.readAsDataURL(file);
-    });
-  }
-
   async function requestUploadValidation(mode) {
     if (!selectedFile) throw new Error("Selecione um arquivo .xlsx.");
     if (!sheetName.trim()) throw new Error("Digite o nome da aba a ser carregada.");
-
-    const fileBase64 = await fileToBase64(selectedFile);
-    const payload = {
-      clientId: selectedClient.id,
-      clientName: selectedClient.name,
-      sheetName: sheetName.trim(),
-      fileName: selectedFile.name,
-      fileBase64,
-    };
-
-    const response = await fetch(mode === "import" ? "/api/import-publicacoes" : "/api/validate-publicacoes-upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
+  
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("clientId", selectedClient.id);
+    formData.append("clientName", selectedClient.name);
+    formData.append("sheetName", sheetName.trim());
+  
+    if (mode === "import") {
+      formData.append("confirm", "true");
+    }
+  
+    const response = await fetch(
+      mode === "import"
+        ? "/api/import-publicacoes"
+        : "/api/validate-publicacoes-upload",
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+  
     const text = await response.text();
+  
     let data;
     try {
       data = JSON.parse(text);
     } catch {
-      data = { error: "A API não retornou JSON válido.", rawResponse: text };
+      data = {
+        error: "A API não retornou JSON válido.",
+        rawResponse: text,
+      };
     }
-
+  
     if (!response.ok) {
-      throw new Error(data.error || data.message || "Erro no processamento do arquivo.");
+      throw new Error(
+        data.error ||
+          data.message ||
+          data.rawResponse ||
+          "Erro no processamento do arquivo."
+      );
     }
-
+  
     return data;
   }
+
+
+
+  
 
   async function validateFile() {
     setError("");
@@ -1110,7 +1116,7 @@ function DataManagementPage() {
   async function confirmImport() {
     setError("");
     setIsImporting(true);
-
+  
     try {
       const data = await requestUploadValidation("import");
       setImportResult(data);

@@ -560,7 +560,7 @@ async function saveImportHistory({
   validation,
   imported,
   updated,
-  ignored,
+  ignored: ignored + notProcessed,
   status,
   errors,
 }) {
@@ -682,15 +682,17 @@ export default async function handler(req, res) {
     let ignored = 0;
     const importErrors = [];
 
-    for (const row of validation.validRowsForImport) {
+    const rowsToImport = validation.validRowsForImport.slice(0, 5);
+    
+    for (const row of rowsToImport) {
       try {
         const action = await insertOrUpdatePublication(row);
-
+    
         if (action === "updated") updated += 1;
         else imported += 1;
       } catch (error) {
         ignored += 1;
-
+    
         if (importErrors.length < 50) {
           importErrors.push({
             row: row.linha_original,
@@ -701,6 +703,11 @@ export default async function handler(req, res) {
       }
     }
 
+    const notProcessed = Math.max(
+      validation.validRowsForImport.length - rowsToImport.length,
+      0
+    );
+    
     const status = importErrors.length ? "importado_com_erros" : "importado";
 
     const history = await saveImportHistory({
@@ -726,6 +733,8 @@ export default async function handler(req, res) {
       summary: {
         totalRows: validation.summary.totalRows,
         validRows: validation.summary.validRows,
+        processedRows: rowsToImport.length,
+        notProcessed,
         imported,
         updated,
         ignored,

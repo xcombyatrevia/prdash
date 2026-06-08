@@ -1365,11 +1365,11 @@ async function requestUploadValidation(mode) {
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
             {[
-              ["Importadas", importSummary.importedRows],
-              ["Atualizadas", importSummary.updatedRows],
-              ["Ignoradas", importSummary.skippedRows],
-              ["Com erro", importSummary.rowsWithErrors],
-              ["Importação", importResult.importId || "—"],
+              ["Processadas", importSummary.processedRows],
+              ["Não processadas", importSummary.notProcessed],
+              ["Importadas", importSummary.imported],
+              ["Atualizadas", importSummary.updated],
+              ["Com erro", importSummary.importErrors],
             ].map(([label, value]) => (
               <div key={label} className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>

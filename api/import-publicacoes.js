@@ -228,6 +228,19 @@ function getCell(row, columnMap, field) {
   return row[index] ?? "";
 }
 
+function normalizeUrl(value) {
+  const url = String(value || "").trim();
+  if (!url) return null;
+  return url;
+}
+
+function sanitizeJsonValue(value) {
+  if (value instanceof Date) return value.toISOString();
+  if (value === undefined) return null;
+  if (Number.isNaN(value)) return null;
+  return value;
+}
+
 function normalizeRow(row, columnMap, originalHeaders, rowNumber, clientId, origemArquivo) {
   const titulo = String(getCell(row, columnMap, "titulo") || "").trim();
   const veiculo = String(getCell(row, columnMap, "veiculo") || "").trim();
@@ -237,9 +250,7 @@ function normalizeRow(row, columnMap, originalHeaders, rowNumber, clientId, orig
   const rawData = {};
   originalHeaders.forEach((header, index) => {
     if (!isBlank(header)) {
-      const value = row[index] ?? "";
-      rawData[String(header)] =
-        value instanceof Date ? value.toISOString() : value;
+      rawData[String(header)] = sanitizeJsonValue(row[index] ?? "");
     }
   });
 
@@ -262,7 +273,7 @@ function normalizeRow(row, columnMap, originalHeaders, rowNumber, clientId, orig
     audiencia: parseInteger(getCell(row, columnMap, "audiencia")),
     tier: String(getCell(row, columnMap, "tier") || "").trim() || null,
     sentimento: String(getCell(row, columnMap, "sentimento") || "").trim() || null,
-    url: String(getCell(row, columnMap, "url") || "").trim() || null,
+    url: normalizeUrl(getCell(row, columnMap, "url")),
     origem_arquivo: origemArquivo,
     linha_original: rowNumber,
     raw_data: rawData,
@@ -411,42 +422,150 @@ function getUploadedFile(files) {
   return file;
 }
 
-async function insertOrUpdatePublication(row) {
-  if (row.url) {
-    const { data: existing, error: selectError } = await supabase
+function chunkArray(items, size) {
+  const chunks = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
+}
+
+async function findExistingByUrls(clientId, urls) {
+  const uniqueUrls = Array.from(new Set(urls.filter(Boolean)));
+
+  if (!uniqueUrls.length) return new Map();
+
+  const existingMap = new Map();
+  const chunks = chunkArray(uniqueUrls, 100);
+
+  for (const chunk of chunks) {
+    const { data, error } = await supabase
       .from("publicacoes")
-      .select("id")
-      .eq("client_id", row.client_id)
-      .eq("url", row.url)
-      .maybeSingle();
+      .select("id, url")
+      .eq("client_id", clientId)
+      .in("url", chunk);
 
-    if (selectError) {
-      throw new Error(`Erro ao verificar duplicidade: ${selectError.message}`);
+    if (error) {
+      throw new Error(`Erro ao buscar duplicidades por URL: ${error.message}`);
     }
 
-    if (existing?.id) {
-      const { error: updateError } = await supabase
-        .from("publicacoes")
-        .update(row)
-        .eq("id", existing.id);
-
-      if (updateError) {
-        throw new Error(`Erro ao atualizar publicação: ${updateError.message}`);
-      }
-
-      return "updated";
+    for (const item of data || []) {
+      if (item.url) existingMap.set(item.url, item.id);
     }
   }
 
-  const { error: insertError } = await supabase
-    .from("publicacoes")
-    .insert(row);
+  return existingMap;
+}
 
-  if (insertError) {
-    throw new Error(`Erro ao inserir publicação: ${insertError.message}`);
+async function insertRowsInBatches(rows) {
+  let inserted = 0;
+  const errors = [];
+  const chunks = chunkArray(rows, 50);
+
+  for (const chunk of chunks) {
+    const { error } = await supabase
+      .from("publicacoes")
+      .insert(chunk);
+
+    if (error) {
+      errors.push({
+        operation: "insert",
+        rows: chunk.map((row) => row.linha_original),
+        error: error.message,
+        details: error,
+      });
+    } else {
+      inserted += chunk.length;
+    }
   }
 
-  return "inserted";
+  return { inserted, errors };
+}
+
+async function updateRowsIndividually(rowsWithIds) {
+  let updated = 0;
+  const errors = [];
+
+  for (const item of rowsWithIds) {
+    const { id, row } = item;
+
+    const { error } = await supabase
+      .from("publicacoes")
+      .update(row)
+      .eq("id", id);
+
+    if (error) {
+      errors.push({
+        operation: "update",
+        row: row.linha_original,
+        title: row.titulo,
+        url: row.url,
+        error: error.message,
+        details: error,
+      });
+    } else {
+      updated += 1;
+    }
+  }
+
+  return { updated, errors };
+}
+
+async function saveImportHistory({
+  clientId,
+  clientName,
+  fileName,
+  sheetName,
+  validation,
+  imported,
+  updated,
+  ignored,
+  importErrors,
+}) {
+  const payload = {
+    client_id: clientId,
+    client_name: clientName,
+    arquivo_nome: fileName,
+    aba_nome: sheetName,
+    linhas_lidas: validation.totalRows || 0,
+    linhas_validas: validation.validRowsCount || 0,
+    linhas_com_alerta: 0,
+    linhas_com_erro: validation.errors?.length || 0,
+    linhas_importadas: imported,
+    linhas_atualizadas: updated,
+    linhas_ignoradas: ignored,
+    status: importErrors.length ? "importado_com_erros" : "importado",
+    erros: importErrors || [],
+    alertas: [],
+    resumo: {
+      totalRows: validation.totalRows || 0,
+      validRows: validation.validRowsCount || 0,
+      ignoredEmptyRows: validation.ignoredEmptyRows || 0,
+      validationErrors: validation.errors?.length || 0,
+    },
+  };
+
+  const { data, error } = await supabase
+    .from("importacoes")
+    .insert(payload)
+    .select("id")
+    .single();
+
+  if (error) {
+    return {
+      saved: false,
+      error: error.message,
+      id: null,
+    };
+  }
+
+  return {
+    saved: true,
+    error: null,
+    id: data?.id || null,
+  };
 }
 
 export default async function handler(req, res) {
@@ -544,51 +663,83 @@ export default async function handler(req, res) {
       });
     }
 
-    const rowsToImport = validation.rows.slice(0, 5);
-    const notProcessed = Math.max(validation.rows.length - rowsToImport.length, 0);
+    const rows = validation.rows;
+    const urls = rows.map((row) => row.url).filter(Boolean);
 
-    let imported = 0;
-    let updated = 0;
-    let ignored = 0;
-    const importErrors = [];
+    steps.push("dedupe_started");
 
-    steps.push("import_loop_started");
+    const existingByUrl = await findExistingByUrls(clientId, urls);
 
-    for (const row of rowsToImport) {
-      try {
-        const action = await insertOrUpdatePublication(row);
+    steps.push("dedupe_finished");
 
-        if (action === "updated") updated += 1;
-        else imported += 1;
-      } catch (error) {
-        ignored += 1;
+    const rowsToUpdate = [];
+    const rowsToInsert = [];
 
-        importErrors.push({
-          row: row.linha_original,
-          title: row.titulo,
-          url: row.url,
-          error: error.message,
-          payloadPreview: row,
+    for (const row of rows) {
+      if (row.url && existingByUrl.has(row.url)) {
+        rowsToUpdate.push({
+          id: existingByUrl.get(row.url),
+          row,
         });
+      } else {
+        rowsToInsert.push(row);
       }
     }
 
-    steps.push("import_loop_finished");
+    steps.push("rows_split");
+
+    const insertResult = await insertRowsInBatches(rowsToInsert);
+
+    steps.push("insert_finished");
+
+    const updateResult = await updateRowsIndividually(rowsToUpdate);
+
+    steps.push("update_finished");
+
+    const importErrors = [
+      ...insertResult.errors,
+      ...updateResult.errors,
+    ];
+
+    const imported = insertResult.inserted;
+    const updated = updateResult.updated;
+    const ignored = importErrors.reduce((sum, error) => {
+      if (Array.isArray(error.rows)) return sum + error.rows.length;
+      return sum + 1;
+    }, 0);
+
+    const history = await saveImportHistory({
+      clientId,
+      clientName,
+      fileName,
+      sheetName,
+      validation,
+      imported,
+      updated,
+      ignored,
+      importErrors,
+    });
+
+    steps.push("history_saved_attempted");
 
     return res.status(importErrors.length ? 207 : 200).json({
       ok: importErrors.length === 0,
-      status: importErrors.length ? "importado_com_erros" : "importado_teste_5_linhas",
-      message: "Teste de importação limitado às 5 primeiras linhas válidas.",
+      status: importErrors.length ? "importado_com_erros" : "importado",
+      message: importErrors.length
+        ? "Importação concluída com erros em algumas linhas/lotes."
+        : "Importação concluída com sucesso.",
       steps,
       clientId,
       clientName,
       sheetName,
       fileName,
+      importId: history.id,
+      history,
       summary: {
         totalRows: validation.totalRows,
         validRows: validation.validRowsCount,
-        processedRows: rowsToImport.length,
-        notProcessed,
+        validationErrors: validation.errors.length,
+        ignoredEmptyRows: validation.ignoredEmptyRows,
         imported,
         updated,
         ignored,
@@ -596,14 +747,7 @@ export default async function handler(req, res) {
       },
       recognizedFields: validation.recognizedFields,
       validationErrors: validation.errors.slice(0, 20),
-      importErrors,
-      importedRowsPreview: rowsToImport.map((row) => ({
-        linha_original: row.linha_original,
-        titulo: row.titulo,
-        veiculo: row.veiculo,
-        data_publicacao: row.data_publicacao,
-        url: row.url,
-      })),
+      importErrors: importErrors.slice(0, 20),
     });
   } catch (error) {
     return res.status(500).json({

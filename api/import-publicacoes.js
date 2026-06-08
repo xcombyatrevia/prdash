@@ -9,7 +9,382 @@ export const config = {
   },
 };
 
-function parseForm(req) {
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+const CLIENT_OPTIONS = {
+  cliente_x: "Cliente X",
+  cliente_y: "Cliente Y",
+  cliente_z: "Cliente Z",
+  cliente_u: "Cliente U",
+  cliente_v: "Cliente V",
+};
+
+const COLUMN_ALIASES = {
+  titulo: ["titulo", "título", "title", "materia", "matéria"],
+  veiculo: ["veiculo", "veículo", "vehicle"],
+  assunto: ["assunto", "tema", "subject"],
+  cidade: ["cidade", "city"],
+  uf: ["uf", "estado", "state"],
+  data_publicacao: [
+    "data de publicacao",
+    "data de publicação",
+    "data publicacao",
+    "data publicação",
+    "publicacao",
+    "publicação",
+    "data",
+  ],
+  data_insercao: [
+    "data de insercao",
+    "data de inserção",
+    "data insercao",
+    "data inserção",
+  ],
+  secao: ["secao", "seção", "editoria", "section"],
+  cm: ["cm", "centimetragem", "centimetragem cm", "cm coluna"],
+  tempo: ["tempo", "duracao", "duração"],
+  retorno_midia: [
+    "retorno de midia",
+    "retorno de mídia",
+    "valoracao",
+    "valoração",
+    "valorizacao",
+    "valorização",
+    "valor",
+  ],
+  tipo_midia: [
+    "tipo de midia",
+    "tipo de mídia",
+    "tipo midia",
+    "tipo mídia",
+    "tipo_midia",
+    "canal",
+    "tipo",
+  ],
+  tiragem: ["tiragem"],
+  unique_visitors: [
+    "unique visitors",
+    "uniquevisitors",
+    "visitantes unicos",
+    "visitantes únicos",
+  ],
+  audiencia: ["audiencia", "audiência", "alcance", "pessoas impactadas"],
+  tier: ["tier"],
+  sentimento: ["sentimento", "sentiment"],
+  url: ["url", "link", "link da materia", "link da matéria"],
+};
+
+const REQUIRED_FIELDS = ["titulo", "veiculo", "data_publicacao"];
+
+function normalizeText(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isBlank(value) {
+  return value === null || value === undefined || String(value).trim() === "";
+}
+
+function isBlankRow(row) {
+  return row.every((cell) => isBlank(cell));
+}
+
+function parseNumber(value) {
+  if (typeof value === "number") return value;
+  if (isBlank(value)) return null;
+
+  let raw = String(value).trim();
+
+  raw = raw
+    .replace(/R\$/gi, "")
+    .replace(/\s/g, "")
+    .replace(/[^\d,.-]/g, "");
+
+  if (!raw) return null;
+
+  const hasComma = raw.includes(",");
+  const hasDot = raw.includes(".");
+
+  if (hasComma && hasDot) {
+    raw = raw.replace(/\./g, "").replace(",", ".");
+  } else if (hasComma) {
+    raw = raw.replace(",", ".");
+  } else if ((raw.match(/\./g) || []).length > 1) {
+    raw = raw.replace(/\./g, "");
+  }
+
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseInteger(value) {
+  const parsed = parseNumber(value);
+  if (parsed === null) return null;
+  return Math.round(parsed);
+}
+
+function excelSerialToDate(serial) {
+  const utcDays = Math.floor(serial - 25569);
+  const utcValue = utcDays * 86400;
+  const date = new Date(utcValue * 1000);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toISODate(date) {
+  if (!date || Number.isNaN(date.getTime())) return null;
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function parseDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return toISODate(value);
+  }
+
+  if (typeof value === "number" && value > 25000 && value < 80000) {
+    return toISODate(excelSerialToDate(value));
+  }
+
+  if (isBlank(value)) return null;
+
+  const raw = String(value).trim().split(" ")[0];
+
+  const delimiter = ["/", "-", "."].find((item) => raw.includes(item));
+
+  if (delimiter) {
+    const parts = raw.split(delimiter).map((part) => Number(part));
+
+    if (parts.length >= 3 && parts.every((part) => Number.isFinite(part))) {
+      if (String(raw.split(delimiter)[0]).length === 4) {
+        return toISODate(new Date(parts[0], parts[1] - 1, parts[2]));
+      }
+
+      const day = parts[0];
+      const month = parts[1];
+      const year = parts[2] < 100 ? 2000 + parts[2] : parts[2];
+
+      return toISODate(new Date(year, month - 1, day));
+    }
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : toISODate(date);
+}
+
+function findHeaderRow(rows) {
+  let bestIndex = 0;
+  let bestScore = 0;
+
+  rows.slice(0, 20).forEach((row, index) => {
+    const normalizedCells = row.map((cell) => normalizeText(cell));
+    let score = 0;
+
+    Object.values(COLUMN_ALIASES).forEach((aliases) => {
+      if (aliases.some((alias) => normalizedCells.includes(normalizeText(alias)))) {
+        score += 1;
+      }
+    });
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  });
+
+  return bestIndex;
+}
+
+function buildColumnMap(headerRow) {
+  const columnMap = {};
+  const normalizedHeaders = headerRow.map((header) => normalizeText(header));
+
+  for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
+    const aliasIndex = normalizedHeaders.findIndex((header) =>
+      aliases.some((alias) => header === normalizeText(alias))
+    );
+
+    if (aliasIndex >= 0) {
+      columnMap[field] = aliasIndex;
+    }
+  }
+
+  return columnMap;
+}
+
+function getCell(row, columnMap, field) {
+  const index = columnMap[field];
+  if (index === undefined) return "";
+  return row[index] ?? "";
+}
+
+function normalizeRow(row, columnMap, originalHeaders, rowNumber, clientId, origemArquivo) {
+  const titulo = String(getCell(row, columnMap, "titulo") || "").trim();
+  const veiculo = String(getCell(row, columnMap, "veiculo") || "").trim();
+  const dataPublicacaoRaw = getCell(row, columnMap, "data_publicacao");
+  const dataPublicacao = parseDate(dataPublicacaoRaw);
+
+  const rawData = {};
+  originalHeaders.forEach((header, index) => {
+    if (!isBlank(header)) {
+      const value = row[index] ?? "";
+      rawData[String(header)] =
+        value instanceof Date ? value.toISOString() : value;
+    }
+  });
+
+  return {
+    client_id: clientId,
+    titulo,
+    veiculo,
+    assunto: String(getCell(row, columnMap, "assunto") || "").trim() || null,
+    cidade: String(getCell(row, columnMap, "cidade") || "").trim() || null,
+    uf: String(getCell(row, columnMap, "uf") || "").trim() || null,
+    data_publicacao: dataPublicacao,
+    data_insercao: parseDate(getCell(row, columnMap, "data_insercao")),
+    secao: String(getCell(row, columnMap, "secao") || "").trim() || null,
+    cm: parseNumber(getCell(row, columnMap, "cm")),
+    tempo: String(getCell(row, columnMap, "tempo") || "").trim() || null,
+    retorno_midia: parseNumber(getCell(row, columnMap, "retorno_midia")),
+    tipo_midia: String(getCell(row, columnMap, "tipo_midia") || "").trim() || null,
+    tiragem: String(getCell(row, columnMap, "tiragem") || "").trim() || null,
+    unique_visitors: parseInteger(getCell(row, columnMap, "unique_visitors")),
+    audiencia: parseInteger(getCell(row, columnMap, "audiencia")),
+    tier: String(getCell(row, columnMap, "tier") || "").trim() || null,
+    sentimento: String(getCell(row, columnMap, "sentimento") || "").trim() || null,
+    url: String(getCell(row, columnMap, "url") || "").trim() || null,
+    origem_arquivo: origemArquivo,
+    linha_original: rowNumber,
+    raw_data: rawData,
+  };
+}
+
+function validateAndNormalizeWorkbook({ workbook, sheetName, clientId, fileName }) {
+  const availableSheets = workbook.SheetNames || [];
+
+  if (!sheetName || !availableSheets.includes(sheetName)) {
+    return {
+      ok: false,
+      error: `A aba "${sheetName}" não foi encontrada.`,
+      availableSheets,
+      rows: [],
+    };
+  }
+
+  const worksheet = workbook.Sheets[sheetName];
+  const allRows = XLSX.utils.sheet_to_json(worksheet, {
+    header: 1,
+    raw: true,
+    defval: "",
+  });
+
+  if (!allRows.length) {
+    return {
+      ok: false,
+      error: "A aba selecionada está vazia.",
+      availableSheets,
+      rows: [],
+    };
+  }
+
+  const headerIndex = findHeaderRow(allRows);
+  const headers = allRows[headerIndex] || [];
+  const columnMap = buildColumnMap(headers);
+
+  const missingRequired = REQUIRED_FIELDS.filter(
+    (field) => columnMap[field] === undefined
+  );
+
+  if (missingRequired.length) {
+    return {
+      ok: false,
+      error: `Colunas obrigatórias ausentes: ${missingRequired.join(", ")}.`,
+      availableSheets,
+      rows: [],
+      recognizedFields: Object.keys(columnMap),
+    };
+  }
+
+  const dataRows = allRows.slice(headerIndex + 1);
+  const validRows = [];
+  const errors = [];
+  let ignoredEmptyRows = 0;
+
+  dataRows.forEach((row, index) => {
+    const rowNumber = headerIndex + index + 2;
+
+    if (isBlankRow(row)) {
+      ignoredEmptyRows += 1;
+      return;
+    }
+
+    const normalized = normalizeRow(
+      row,
+      columnMap,
+      headers,
+      rowNumber,
+      clientId,
+      fileName
+    );
+
+    const rowErrors = [];
+
+    if (!normalized.titulo) {
+      rowErrors.push({
+        row: rowNumber,
+        field: "Título",
+        message: "Título ausente.",
+      });
+    }
+
+    if (!normalized.veiculo) {
+      rowErrors.push({
+        row: rowNumber,
+        field: "Veículo",
+        message: "Veículo ausente.",
+      });
+    }
+
+    if (!normalized.data_publicacao) {
+      rowErrors.push({
+        row: rowNumber,
+        field: "Data de Publicação",
+        message: "Data de Publicação ausente ou inválida.",
+      });
+    }
+
+    if (rowErrors.length) {
+      errors.push(...rowErrors);
+      return;
+    }
+
+    validRows.push(normalized);
+  });
+
+  return {
+    ok: true,
+    availableSheets,
+    headerIndex,
+    totalRows: dataRows.length,
+    validRowsCount: validRows.length,
+    ignoredEmptyRows,
+    errors,
+    rows: validRows,
+    recognizedFields: Object.keys(columnMap),
+  };
+}
+
+async function parseForm(req) {
   const form = formidable({
     multiples: false,
     keepExtensions: true,
@@ -36,6 +411,44 @@ function getUploadedFile(files) {
   return file;
 }
 
+async function insertOrUpdatePublication(row) {
+  if (row.url) {
+    const { data: existing, error: selectError } = await supabase
+      .from("publicacoes")
+      .select("id")
+      .eq("client_id", row.client_id)
+      .eq("url", row.url)
+      .maybeSingle();
+
+    if (selectError) {
+      throw new Error(`Erro ao verificar duplicidade: ${selectError.message}`);
+    }
+
+    if (existing?.id) {
+      const { error: updateError } = await supabase
+        .from("publicacoes")
+        .update(row)
+        .eq("id", existing.id);
+
+      if (updateError) {
+        throw new Error(`Erro ao atualizar publicação: ${updateError.message}`);
+      }
+
+      return "updated";
+    }
+  }
+
+  const { error: insertError } = await supabase
+    .from("publicacoes")
+    .insert(row);
+
+  if (insertError) {
+    throw new Error(`Erro ao inserir publicação: ${insertError.message}`);
+  }
+
+  return "inserted";
+}
+
 export default async function handler(req, res) {
   const steps = [];
 
@@ -52,49 +465,46 @@ export default async function handler(req, res) {
 
     steps.push("method_ok");
 
-    const supabaseUrl = process.env.SUPABASE_URL || "";
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-
-    steps.push("env_checked");
-
-    if (!supabaseUrl) {
-      return res.status(500).json({
-        ok: false,
-        error: "SUPABASE_URL ausente.",
-        steps,
-      });
-    }
-
-    if (!supabaseKey) {
-      return res.status(500).json({
-        ok: false,
-        error: "SUPABASE_SERVICE_ROLE_KEY ausente.",
-        steps,
-      });
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    steps.push("supabase_client_created");
-
     const { fields, files } = await parseForm(req);
-
     steps.push("form_parsed");
 
     const clientId = getField(fields, "clientId", "cliente_x");
-    const clientName = getField(fields, "clientName", "Cliente X");
+    const clientName = getField(fields, "clientName", CLIENT_OPTIONS[clientId] || "Cliente X");
     const sheetName = getField(fields, "sheetName", "").trim();
-    const confirm = getField(fields, "confirm", "false");
+    const confirm = getField(fields, "confirm", "false") === "true";
     const uploadedFile = getUploadedFile(files);
 
     steps.push("fields_read");
+
+    if (!CLIENT_OPTIONS[clientId]) {
+      return res.status(400).json({
+        ok: false,
+        error: "Cliente inválido.",
+        steps,
+      });
+    }
+
+    if (!sheetName) {
+      return res.status(400).json({
+        ok: false,
+        error: "Informe o nome da aba a ser importada.",
+        steps,
+      });
+    }
+
+    if (!confirm) {
+      return res.status(400).json({
+        ok: false,
+        error: "Importação não confirmada.",
+        steps,
+      });
+    }
 
     if (!uploadedFile) {
       return res.status(400).json({
         ok: false,
         error: "Arquivo Excel obrigatório.",
         steps,
-        receivedFields: fields,
         receivedFileKeys: Object.keys(files || {}),
       });
     }
@@ -107,7 +517,6 @@ export default async function handler(req, res) {
     steps.push("file_found");
 
     const fileBuffer = await fs.readFile(uploadedFile.filepath);
-
     steps.push("file_read");
 
     const workbook = XLSX.read(fileBuffer, {
@@ -117,64 +526,89 @@ export default async function handler(req, res) {
 
     steps.push("workbook_read");
 
-    const availableSheets = workbook.SheetNames || [];
-
-    if (!sheetName || !availableSheets.includes(sheetName)) {
-      return res.status(400).json({
-        ok: false,
-        error: `A aba "${sheetName}" não foi encontrada.`,
-        availableSheets,
-        steps,
-      });
-    }
-
-    steps.push("sheet_found");
-
-    const worksheet = workbook.Sheets[sheetName];
-
-    const rows = XLSX.utils.sheet_to_json(worksheet, {
-      header: 1,
-      raw: true,
-      defval: "",
+    const validation = validateAndNormalizeWorkbook({
+      workbook,
+      sheetName,
+      clientId,
+      fileName,
     });
 
-    steps.push("rows_read");
+    steps.push("validated");
 
-    const { data, error } = await supabase
-      .from("publicacoes")
-      .select("id")
-      .limit(1);
-
-    steps.push("supabase_test_query_done");
-
-    if (error) {
-      return res.status(500).json({
+    if (!validation.ok) {
+      return res.status(400).json({
         ok: false,
-        error: `Erro ao consultar publicacoes: ${error.message}`,
-        details: error,
+        error: validation.error || "Arquivo inválido.",
+        validation,
         steps,
       });
     }
 
-    return res.status(200).json({
-      ok: true,
-      status: "diagnostico_importacao_ok",
-      message: "A rota recebeu o arquivo, leu o Excel e consultou o Supabase.",
+    const rowsToImport = validation.rows.slice(0, 5);
+    const notProcessed = Math.max(validation.rows.length - rowsToImport.length, 0);
+
+    let imported = 0;
+    let updated = 0;
+    let ignored = 0;
+    const importErrors = [];
+
+    steps.push("import_loop_started");
+
+    for (const row of rowsToImport) {
+      try {
+        const action = await insertOrUpdatePublication(row);
+
+        if (action === "updated") updated += 1;
+        else imported += 1;
+      } catch (error) {
+        ignored += 1;
+
+        importErrors.push({
+          row: row.linha_original,
+          title: row.titulo,
+          url: row.url,
+          error: error.message,
+          payloadPreview: row,
+        });
+      }
+    }
+
+    steps.push("import_loop_finished");
+
+    return res.status(importErrors.length ? 207 : 200).json({
+      ok: importErrors.length === 0,
+      status: importErrors.length ? "importado_com_erros" : "importado_teste_5_linhas",
+      message: "Teste de importação limitado às 5 primeiras linhas válidas.",
       steps,
       clientId,
       clientName,
       sheetName,
-      confirm,
       fileName,
-      fileSize: uploadedFile.size,
-      availableSheets,
-      totalRowsInSheet: rows.length,
-      supabaseRowsFound: data?.length || 0,
+      summary: {
+        totalRows: validation.totalRows,
+        validRows: validation.validRowsCount,
+        processedRows: rowsToImport.length,
+        notProcessed,
+        imported,
+        updated,
+        ignored,
+        importErrors: importErrors.length,
+      },
+      recognizedFields: validation.recognizedFields,
+      validationErrors: validation.errors.slice(0, 20),
+      importErrors,
+      importedRowsPreview: rowsToImport.map((row) => ({
+        linha_original: row.linha_original,
+        titulo: row.titulo,
+        veiculo: row.veiculo,
+        data_publicacao: row.data_publicacao,
+        url: row.url,
+      })),
     });
   } catch (error) {
     return res.status(500).json({
       ok: false,
-      error: error.message || "Erro inesperado no diagnóstico de importação.",
+      error: error.message || "Erro inesperado ao importar publicações.",
       stack: error.stack || null,
       steps,
     });

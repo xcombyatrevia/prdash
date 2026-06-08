@@ -96,6 +96,11 @@ function isBlankRow(row) {
   return row.every((cell) => isBlank(cell));
 }
 
+function normalizeUrl(value) {
+  const url = String(value || "").trim();
+  return url || null;
+}
+
 function parseNumber(value) {
   if (typeof value === "number") return value;
   if (isBlank(value)) return null;
@@ -159,7 +164,6 @@ function parseDate(value) {
   if (isBlank(value)) return null;
 
   const raw = String(value).trim().split(" ")[0];
-
   const delimiter = ["/", "-", "."].find((item) => raw.includes(item));
 
   if (delimiter) {
@@ -228,10 +232,34 @@ function getCell(row, columnMap, field) {
   return row[index] ?? "";
 }
 
-function normalizeUrl(value) {
-  const url = String(value || "").trim();
-  if (!url) return null;
-  return url;
+function getCellHyperlink(worksheet, rowNumber, columnIndex) {
+  if (!worksheet) return null;
+  if (columnIndex === undefined || columnIndex === null) return null;
+
+  const cellAddress = XLSX.utils.encode_cell({
+    r: rowNumber - 1,
+    c: columnIndex,
+  });
+
+  const cell = worksheet[cellAddress];
+
+  if (!cell || !cell.l) return null;
+
+  const target = cell.l.Target || cell.l.target || "";
+  return String(target || "").trim() || null;
+}
+
+function getUrlFromRow(row, columnMap, worksheet, rowNumber) {
+  const explicitUrl = String(getCell(row, columnMap, "url") || "").trim();
+
+  if (explicitUrl) {
+    return explicitUrl;
+  }
+
+  const titleColumnIndex = columnMap.titulo;
+  const titleHyperlink = getCellHyperlink(worksheet, rowNumber, titleColumnIndex);
+
+  return titleHyperlink || null;
 }
 
 function sanitizeJsonValue(value) {
@@ -241,7 +269,7 @@ function sanitizeJsonValue(value) {
   return value;
 }
 
-function normalizeRow(row, columnMap, originalHeaders, rowNumber, clientId, origemArquivo) {
+function normalizeRow(row, columnMap, originalHeaders, rowNumber, clientId, origemArquivo, worksheet) {
   const titulo = String(getCell(row, columnMap, "titulo") || "").trim();
   const veiculo = String(getCell(row, columnMap, "veiculo") || "").trim();
   const dataPublicacaoRaw = getCell(row, columnMap, "data_publicacao");
@@ -253,6 +281,8 @@ function normalizeRow(row, columnMap, originalHeaders, rowNumber, clientId, orig
       rawData[String(header)] = sanitizeJsonValue(row[index] ?? "");
     }
   });
+
+  const url = normalizeUrl(getUrlFromRow(row, columnMap, worksheet, rowNumber));
 
   return {
     client_id: clientId,
@@ -273,7 +303,7 @@ function normalizeRow(row, columnMap, originalHeaders, rowNumber, clientId, orig
     audiencia: parseInteger(getCell(row, columnMap, "audiencia")),
     tier: String(getCell(row, columnMap, "tier") || "").trim() || null,
     sentimento: String(getCell(row, columnMap, "sentimento") || "").trim() || null,
-    url: normalizeUrl(getCell(row, columnMap, "url")),
+    url,
     origem_arquivo: origemArquivo,
     linha_original: rowNumber,
     raw_data: rawData,
@@ -330,6 +360,9 @@ function validateAndNormalizeWorkbook({ workbook, sheetName, clientId, fileName 
   const validRows = [];
   const errors = [];
   let ignoredEmptyRows = 0;
+  let rowsWithExplicitUrl = 0;
+  let rowsWithUrlFromTitle = 0;
+  let rowsWithoutUrl = 0;
 
   dataRows.forEach((row, index) => {
     const rowNumber = headerIndex + index + 2;
@@ -339,13 +372,17 @@ function validateAndNormalizeWorkbook({ workbook, sheetName, clientId, fileName 
       return;
     }
 
+    const explicitUrl = String(getCell(row, columnMap, "url") || "").trim();
+    const titleHyperlink = getCellHyperlink(worksheet, rowNumber, columnMap.titulo);
+
     const normalized = normalizeRow(
       row,
       columnMap,
       headers,
       rowNumber,
       clientId,
-      fileName
+      fileName,
+      worksheet
     );
 
     const rowErrors = [];
@@ -379,6 +416,10 @@ function validateAndNormalizeWorkbook({ workbook, sheetName, clientId, fileName 
       return;
     }
 
+    if (normalized.url && explicitUrl) rowsWithExplicitUrl += 1;
+    else if (normalized.url && titleHyperlink) rowsWithUrlFromTitle += 1;
+    else rowsWithoutUrl += 1;
+
     validRows.push(normalized);
   });
 
@@ -392,6 +433,11 @@ function validateAndNormalizeWorkbook({ workbook, sheetName, clientId, fileName 
     errors,
     rows: validRows,
     recognizedFields: Object.keys(columnMap),
+    urlStats: {
+      rowsWithExplicitUrl,
+      rowsWithUrlFromTitle,
+      rowsWithoutUrl,
+    },
   };
 }
 
@@ -544,6 +590,7 @@ async function saveImportHistory({
       validRows: validation.validRowsCount || 0,
       ignoredEmptyRows: validation.ignoredEmptyRows || 0,
       validationErrors: validation.errors?.length || 0,
+      urlStats: validation.urlStats || {},
     },
   };
 
@@ -744,6 +791,9 @@ export default async function handler(req, res) {
         updated,
         ignored,
         importErrors: importErrors.length,
+        rowsWithExplicitUrl: validation.urlStats.rowsWithExplicitUrl,
+        rowsWithUrlFromTitle: validation.urlStats.rowsWithUrlFromTitle,
+        rowsWithoutUrl: validation.urlStats.rowsWithoutUrl,
       },
       recognizedFields: validation.recognizedFields,
       validationErrors: validation.errors.slice(0, 20),

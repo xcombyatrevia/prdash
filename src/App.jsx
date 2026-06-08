@@ -1512,6 +1512,9 @@ export default function PRDashboard() {
 
   const [activePage, setActivePage] = useState("Visão Geral");
   const [publications, setPublications] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedClient, setSelectedClient] = useState(null);
   const [monthlyData, setMonthlyData] = useState(FALLBACK_MONTHLY);
   const [vehicles, setVehicles] = useState([]);
   const [rules, setRules] = useState([]);
@@ -1533,77 +1536,114 @@ export default function PRDashboard() {
     }, 0);
   }
 
-
-async function loadData() {
-  setIsLoading(true);
-  setLoadError("");
-
-  try {
-    const [publicationsResponse, monthlyResponse, vehiclesResponse, rulesResponse] = await Promise.all([
-      fetch("/api/get-publicacoes?clientId=cliente_x"),
-      fetch(csvUrl(MONTHLY_SHEET)),
-      fetch(csvUrl(VEHICLES_SHEET, VALUATION_SHEET_ID)),
-      fetch(csvUrl(RULES_SHEET, VALUATION_SHEET_ID)),
-    ]);
-
-    if (!publicationsResponse.ok) throw new Error("Erro ao carregar publicações do Supabase.");
-    if (!monthlyResponse.ok) throw new Error(`Erro ao carregar ${MONTHLY_SHEET}`);
-    if (!vehiclesResponse.ok) throw new Error(`Erro ao carregar ${VEHICLES_SHEET}`);
-
-    const [publicationsJson, monthlyCsv, vehiclesCsv, rulesCsv] = await Promise.all([
-      publicationsResponse.json(),
-      monthlyResponse.text(),
-      vehiclesResponse.text(),
-      rulesResponse.ok ? rulesResponse.text() : Promise.resolve(""),
-    ]);
-
-    if (!publicationsJson.ok) {
-      throw new Error(publicationsJson.error || "A API de publicações não retornou dados válidos.");
-    }
-
-    const looksLikeHtml = (text) =>
-      String(text || "").trim().startsWith("<") ||
-      String(text || "").includes("<html");
-
-    if (looksLikeHtml(monthlyCsv)) throw new Error(`A aba ${MONTHLY_SHEET} não retornou CSV.`);
-    if (looksLikeHtml(vehiclesCsv)) throw new Error(`A aba ${VEHICLES_SHEET} não retornou CSV.`);
-
-    const normalizedPublications = (publicationsJson.publications || [])
-      .map(normalizeSupabasePublication)
-      .filter((item) => item.title || item.vehicle);
-
-    const normalizedMonthly = rowsToObjects(parseCSV(monthlyCsv))
-      .map(normalizeMonthly)
-      .filter(Boolean);
-
-    const normalizedVehicles = rowsToObjects(parseCSV(vehiclesCsv))
-      .map(normalizeVehicle)
-      .filter(Boolean);
-
-    const normalizedRules = rulesCsv ? rowsToObjects(parseCSV(rulesCsv)) : [];
-
-    setPublications(normalizedPublications);
-    if (normalizedMonthly.length) setMonthlyData(normalizedMonthly);
-    setVehicles(normalizedVehicles);
-    setRules(normalizedRules);
-
-    setLastUpdated(
-      `${new Date().toLocaleString("pt-BR", {
-        dateStyle: "short",
-        timeStyle: "short",
-      })} · publicações via Supabase`
-    );
-  } catch (error) {
-    setLoadError(error.message || "Não foi possível carregar os dados.");
-  } finally {
-    setIsLoading(false);
-  }
-}
-
+  async function loadClients() {
+    try {
+      const response = await fetch("/api/get-clientes");
+      const data = await response.json();
   
-
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Erro ao carregar clientes.");
+      }
+  
+      const loadedClients = data.clients || data.clientes || [];
+  
+      setClients(loadedClients);
+  
+      if (!selectedClientId && loadedClients.length) {
+        setSelectedClientId(loadedClients[0].id);
+        setSelectedClient(loadedClients[0]);
+        return loadedClients[0].id;
+      }
+  
+      return selectedClientId;
+    } catch (error) {
+      setLoadError(error.message || "Erro ao carregar clientes.");
+      setClients([]);
+      setSelectedClientId("");
+      setSelectedClient(null);
+      return "";
+    }
+  }
+  
+  async function loadData(clientIdToLoad = selectedClientId) {
+    setIsLoading(true);
+    setLoadError("");
+  
+    try {
+      let clientId = clientIdToLoad;
+  
+      if (!clientId) {
+        clientId = await loadClients();
+      }
+  
+      if (!clientId) {
+        throw new Error("Selecione um cliente para carregar o dashboard.");
+      }
+  
+      const response = await fetch(
+        `/api/get-dashboard-data?clientId=${encodeURIComponent(clientId)}`
+      );
+  
+      const data = await response.json();
+  
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Erro ao carregar dados do dashboard.");
+      }
+  
+      const normalizedPublications = (data.publications || [])
+        .map(normalizeSupabasePublication)
+        .filter((item) => item.title || item.vehicle);
+  
+      const normalizedMonthly = (data.monthlyData || [])
+        .map(normalizeMonthly)
+        .filter(Boolean);
+  
+      const normalizedVehicles = (data.vehicles || [])
+        .map(normalizeVehicle)
+        .filter(Boolean);
+  
+      const normalizedRules = data.rules || [];
+  
+      setSelectedClientId(data.clientId);
+      setSelectedClient(data.client || null);
+  
+      setPublications(normalizedPublications);
+      setMonthlyData(normalizedMonthly);
+      setVehicles(normalizedVehicles);
+      setRules(normalizedRules);
+  
+      const latestRange = getLatestPublicationMonthRange(normalizedPublications);
+      setStartDate(latestRange.startDate);
+      setEndDate(latestRange.endDate);
+  
+      setLastUpdated(
+        `${new Date().toLocaleString("pt-BR", {
+          dateStyle: "short",
+          timeStyle: "short",
+        })} · ${data.client?.nome || data.client?.name || data.clientId} via Supabase`
+      );
+    } catch (error) {
+      setLoadError(error.message || "Não foi possível carregar os dados.");
+      setPublications([]);
+      setMonthlyData([]);
+      setVehicles([]);
+      setRules([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+    
+  
   useEffect(() => {
-    loadData();
+    async function start() {
+      const initialClientId = await loadClients();
+  
+      if (initialClientId) {
+        await loadData(initialClientId);
+      }
+    }
+  
+    start();
   }, []);
 
   const filteredPublications = useMemo(() => {
@@ -1767,8 +1807,8 @@ async function loadData() {
 
             <div className="flex flex-wrap items-center gap-3">
               <button
-                onClick={loadData}
-                disabled={isLoading}
+                onClick={() => loadData(selectedClientId)}
+                disabled={!selectedClientId || isLoading}
                 className="flex items-center gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/15 disabled:opacity-60"
               >
                 <RefreshCw size={17} className={isLoading ? "animate-spin" : ""} />
@@ -1784,6 +1824,37 @@ async function loadData() {
                   className="ml-2 bg-transparent text-sm text-slate-100 outline-none"
                 />
               </label>
+
+              <div className="flex flex-col gap-1">
+                
+              <label className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                Cliente
+              </label>
+            
+              <select
+                value={selectedClientId}
+                onChange={(event) => {
+                  const nextClientId = event.target.value;
+                  const nextClient = clients.find((client) => client.id === nextClientId) || null;
+            
+                  setSelectedClientId(nextClientId);
+                  setSelectedClient(nextClient);
+            
+                  if (nextClientId) {
+                    loadData(nextClientId);
+                  }
+                }}
+                className="rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/50"
+              >
+                <option value="">Selecione um cliente</option>
+            
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.nome || client.name || client.id}
+                  </option>
+                ))}
+              </select>
+            </div>
 
               <label className="rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-slate-400">
                 Fim

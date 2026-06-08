@@ -847,7 +847,6 @@ function AiAnalysisCard({ selectedPublication = null }) {
   const [result, setResult] = useState(null);
   const [rawApiResponse, setRawApiResponse] = useState("");
   const [httpStatus, setHttpStatus] = useState("");
-
   useEffect(() => {
     if (!selectedPublication) return;
 
@@ -1684,16 +1683,130 @@ export default function PRDashboard() {
     
   
   useEffect(() => {
+    let mounted = true;
+    let subscription = null;
+
+    async function checkSession() {
+      try {
+        const hasSupabaseConfig =
+          Boolean(import.meta.env.VITE_SUPABASE_URL) &&
+          Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY);
+
+        if (!hasSupabaseConfig) {
+          throw new Error(
+            "Configuração do Supabase ausente no frontend. Confira VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel."
+          );
+        }
+
+        const sessionPromise = supabaseBrowser.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => {
+          window.setTimeout(() => {
+            reject(new Error("Tempo esgotado ao verificar sessão do Supabase."));
+          }, 6000);
+        });
+
+        const { data, error } = await Promise.race([sessionPromise, timeoutPromise]);
+
+        if (!mounted) return;
+
+        if (error) {
+          throw new Error(error.message || "Erro ao verificar sessão.");
+        }
+
+        setAuthSession(data.session || null);
+        setAuthUser(data.session?.user || null);
+      } catch (error) {
+        if (!mounted) return;
+
+        console.error("AUTH CHECK ERROR", error);
+        setAuthSession(null);
+        setAuthUser(null);
+        setLoginError(error.message || "Erro ao verificar acesso.");
+      } finally {
+        if (mounted) {
+          setIsCheckingAuth(false);
+        }
+      }
+    }
+
+    checkSession();
+
+    const authListener = supabaseBrowser.auth.onAuthStateChange((_event, session) => {
+      setAuthSession(session || null);
+      setAuthUser(session?.user || null);
+      setIsCheckingAuth(false);
+    });
+
+    subscription = authListener?.data?.subscription || null;
+
+    return () => {
+      mounted = false;
+
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authSession) return;
+
     async function start() {
       const initialClientId = await loadClients();
-  
+
       if (initialClientId) {
         await loadData(initialClientId);
       }
     }
-  
+
     start();
-  }, []);
+  }, [authSession]);
+
+  async function handleLogin(event) {
+    event.preventDefault();
+
+    setLoginError("");
+    setIsLoggingIn(true);
+
+    try {
+      const email = loginEmail.trim();
+
+      if (!email || !loginPassword) {
+        throw new Error("Informe email e senha.");
+      }
+
+      const { data, error } = await supabaseBrowser.auth.signInWithPassword({
+        email,
+        password: loginPassword,
+      });
+
+      if (error) {
+        throw new Error(error.message || "Não foi possível fazer login.");
+      }
+
+      setAuthSession(data.session || null);
+      setAuthUser(data.user || null);
+      setLoginPassword("");
+    } catch (error) {
+      setLoginError(error.message || "Erro ao fazer login.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }
+
+  async function handleLogout() {
+    await supabaseBrowser.auth.signOut();
+
+    setAuthSession(null);
+    setAuthUser(null);
+    setPublications([]);
+    setMonthlyData([]);
+    setVehicles([]);
+    setRules([]);
+    setLastUpdated("");
+    setSelectedClientId("");
+    setSelectedClient(null);
+  }
 
   const filteredPublications = useMemo(() => {
     const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
@@ -1944,6 +2057,17 @@ export default function PRDashboard() {
                 {isLoading ? "Carregando..." : "Carregar dados"}
               </button>
 
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-xs text-slate-400">
+                <span className="max-w-[180px] truncate">{authUser?.email}</span>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-md border border-white/10 px-2 py-1 text-slate-200 transition hover:bg-white/5"
+                >
+                  Sair
+                </button>
+              </div>
+
               <label className="rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-slate-400">
                 Início
                 <input
@@ -1997,20 +2121,6 @@ export default function PRDashboard() {
 
               <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-200">
                 <Calendar size={18} /> {periodLabel}
-              </div>
-
-              <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-200">
-                <span className="max-w-[180px] truncate text-xs text-slate-400">
-                  {authUser?.email}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-100 transition hover:bg-white/10"
-                >
-                  Sair
-                </button>
               </div>
             </div>
           </header>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import {
   BarChart,
   Bar,
@@ -40,6 +41,11 @@ import {
   CheckCircle,
   XCircle,
 } from "lucide-react";
+
+const supabaseBrowser = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 const SHEET_ID = "1wFL7LF1Q-GdsATZoACaTSl2SxCdVXZYPGN7veHYHBVY";
 const PUBLICATIONS_SHEET = "CLIENTEX";
@@ -1559,6 +1565,14 @@ export default function PRDashboard() {
   const [lastUpdated, setLastUpdated] = useState("dados estáticos iniciais");
   const [selectedAiPublication, setSelectedAiPublication] = useState(null);
 
+  const [authSession, setAuthSession] = useState(null);
+  const [authUser, setAuthUser] = useState(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   function handleAnalyzePublication(publication) {
     setSelectedAiPublication(publication);
 
@@ -1795,6 +1809,84 @@ export default function PRDashboard() {
     </Card>
   );
 
+  if (isCheckingAuth) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-slate-100">
+        <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-6 text-sm text-slate-300 shadow-2xl">
+          Verificando acesso...
+        </div>
+      </div>
+    );
+  }
+
+  if (!authSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-slate-100">
+        <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/80 p-8 shadow-2xl">
+          <div className="mb-8">
+            <p className="text-xs uppercase tracking-[0.3em] text-cyan-300">
+              PR Dashboard
+            </p>
+
+            <h1 className="mt-3 text-3xl font-semibold text-white">
+              Acesse sua conta
+            </h1>
+
+            <p className="mt-3 text-sm text-slate-400">
+              Entre com seu email e senha para visualizar o dashboard.
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-slate-500">
+                Email
+              </label>
+
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/50"
+                placeholder="seu@email.com"
+                autoComplete="email"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-slate-500">
+                Senha
+              </label>
+
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/50"
+                placeholder="Digite sua senha"
+                autoComplete="current-password"
+              />
+            </div>
+
+            {loginError && (
+              <div className="rounded-xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                {loginError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLoggingIn ? "Entrando..." : "Entrar"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#030b13] text-slate-100">
       <div className="flex">
@@ -1905,6 +1997,20 @@ export default function PRDashboard() {
 
               <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-200">
                 <Calendar size={18} /> {periodLabel}
+              </div>
+
+              <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-200">
+                <span className="max-w-[180px] truncate text-xs text-slate-400">
+                  {authUser?.email}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-100 transition hover:bg-white/10"
+                >
+                  Sair
+                </button>
               </div>
             </div>
           </header>

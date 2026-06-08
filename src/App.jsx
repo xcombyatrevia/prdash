@@ -268,6 +268,40 @@ function getPreviousMonthRange(referenceDate = new Date()) {
   };
 }
 
+
+function getMonthRangeFromDate(date) {
+  if (!date || Number.isNaN(date.getTime())) {
+    return getPreviousMonthRange();
+  }
+
+  const year = date.getFullYear();
+  const month = date.getMonth();
+
+  const start = new Date(year, month, 1);
+  const end = new Date(year, month + 1, 0);
+
+  return {
+    startDate: toInputDate(start),
+    endDate: toInputDate(end),
+  };
+}
+
+function getLatestPublicationMonthRange(publications) {
+  const validDates = publications
+    .map((publication) => publication.publicationDate)
+    .filter((date) => date instanceof Date && !Number.isNaN(date.getTime()));
+
+  if (!validDates.length) {
+    return getPreviousMonthRange();
+  }
+
+  const latestDate = validDates.reduce((latest, current) => {
+    return current > latest ? current : latest;
+  }, validDates[0]);
+
+  return getMonthRangeFromDate(latestDate);
+}
+
 function getValue(row, keys) {
   for (const key of keys) {
     const normalized = normalizeKey(key);
@@ -1612,10 +1646,11 @@ export default function PRDashboard() {
       setVehicles(normalizedVehicles);
       setRules(normalizedRules);
   
-      const latestRange = getLatestPublicationMonthRange(normalizedPublications);
-      setStartDate(latestRange.startDate);
-      setEndDate(latestRange.endDate);
-  
+      if (!startDate || !endDate) {
+        const latestRange = getLatestPublicationMonthRange(normalizedPublications);
+        setStartDate(latestRange.startDate);
+        setEndDate(latestRange.endDate);
+      }
       setLastUpdated(
         `${new Date().toLocaleString("pt-BR", {
           dateStyle: "short",
@@ -1802,7 +1837,9 @@ export default function PRDashboard() {
                 <h1 className="font-serif text-4xl text-white md:text-5xl">Dashboard de Resultados de PR</h1>
                 <span className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-300">Relatório mensal</span>
               </div>
-              <p className="mt-1 text-xl text-slate-300">Cliente X — dados dinâmicos por período</p>
+              <p className="mt-1 text-xl text-slate-300">
+                {selectedClient?.nome || selectedClient?.name || "Cliente selecionado"} — dados dinâmicos por período
+              </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">

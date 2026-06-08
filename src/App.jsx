@@ -338,6 +338,125 @@ function normalizePublication(row, index) {
   };
 }
 
+function normalizeSupabasePublication(row, index) {
+  return {
+    id: row.id || index + 1,
+    databaseId: row.databaseId || row.id || "",
+    numeroPublicacao: row.numeroPublicacao || row.numero_publicacao || null,
+
+    publicationId:
+      String(
+        row.publicationId ||
+          row.databaseId ||
+          row.id ||
+          row.numeroPublicacao ||
+          row.numero_publicacao ||
+          ""
+      ).trim() || `supabase_${index + 1}`,
+
+    title:
+      row.title ||
+      row.titulo ||
+      `Publicação ${index + 1}`,
+
+    vehicle:
+      row.vehicle ||
+      row.veiculo ||
+      "Veículo não informado",
+
+    subject:
+      row.subject ||
+      row.assunto ||
+      "Sem assunto",
+
+    city:
+      row.city ||
+      row.cidade ||
+      "",
+
+    uf:
+      row.uf ||
+      row.state ||
+      row.estado ||
+      "ND",
+
+    publicationDate: parseDate(
+      row.publicationDate ||
+        row.dataPublicacao ||
+        row.data_publicacao
+    ),
+
+    insertionDate: parseDate(
+      row.insertionDate ||
+        row.data_insercao
+    ),
+
+    section:
+      row.section ||
+      row.secao ||
+      "",
+
+    cm: parseNumber(
+      row.cm ||
+        row.centimetragem
+    ),
+
+    time:
+      row.time ||
+      row.tempo ||
+      row.duration ||
+      "",
+
+    oldValuation: parseNumber(
+      row.oldValuation ||
+        row.retorno_midia ||
+        row.retornoMidia ||
+        row.valuation
+    ),
+
+    mediaType:
+      row.mediaType ||
+      row.tipoMidia ||
+      row.tipo_midia ||
+      "Não informado",
+
+    circulation:
+      row.circulation ||
+      row.tiragem ||
+      "",
+
+    uniqueVisitors: parseNumber(
+      row.uniqueVisitors ||
+        row.unique_visitors
+    ),
+
+    audience: parseNumber(
+      row.audience ||
+        row.audiencia ||
+        row.alcance
+    ),
+
+    tier:
+      row.tier ||
+      "ND",
+
+    sentiment:
+      row.sentiment ||
+      row.sentimento ||
+      "",
+
+    url:
+      String(row.url || row.link || "").trim(),
+
+    raw:
+      row.rawData ||
+      row.raw_data ||
+      row,
+  };
+}
+
+
+
 function normalizeMonthly(row) {
   const year = parseNumber(getValue(row, ["Ano", "Year"]));
   const monthNumber = parseNumber(getValue(row, ["Mês", "Mes", "Month"]));
@@ -1414,55 +1533,74 @@ export default function PRDashboard() {
     }, 0);
   }
 
-  async function loadData() {
-    setIsLoading(true);
-    setLoadError("");
 
-    try {
-      const [publicationsResponse, monthlyResponse, vehiclesResponse, rulesResponse] = await Promise.all([
-        fetch(csvUrl(PUBLICATIONS_SHEET)),
-        fetch(csvUrl(MONTHLY_SHEET)),
-        fetch(csvUrl(VEHICLES_SHEET, VALUATION_SHEET_ID)),
-        fetch(csvUrl(RULES_SHEET, VALUATION_SHEET_ID)),
-      ]);
+async function loadData() {
+  setIsLoading(true);
+  setLoadError("");
 
-      if (!publicationsResponse.ok) throw new Error(`Erro ao carregar ${PUBLICATIONS_SHEET}`);
-      if (!monthlyResponse.ok) throw new Error(`Erro ao carregar ${MONTHLY_SHEET}`);
-      if (!vehiclesResponse.ok) throw new Error(`Erro ao carregar ${VEHICLES_SHEET}`);
+  try {
+    const [publicationsResponse, monthlyResponse, vehiclesResponse, rulesResponse] = await Promise.all([
+      fetch("/api/get-publicacoes?clientId=cliente_x"),
+      fetch(csvUrl(MONTHLY_SHEET)),
+      fetch(csvUrl(VEHICLES_SHEET, VALUATION_SHEET_ID)),
+      fetch(csvUrl(RULES_SHEET, VALUATION_SHEET_ID)),
+    ]);
 
-      const [publicationsCsv, monthlyCsv, vehiclesCsv, rulesCsv] = await Promise.all([
-        publicationsResponse.text(),
-        monthlyResponse.text(),
-        vehiclesResponse.text(),
-        rulesResponse.ok ? rulesResponse.text() : Promise.resolve(""),
-      ]);
+    if (!publicationsResponse.ok) throw new Error("Erro ao carregar publicações do Supabase.");
+    if (!monthlyResponse.ok) throw new Error(`Erro ao carregar ${MONTHLY_SHEET}`);
+    if (!vehiclesResponse.ok) throw new Error(`Erro ao carregar ${VEHICLES_SHEET}`);
 
-      const looksLikeHtml = (text) => String(text || "").trim().startsWith("<") || String(text || "").includes("<html");
+    const [publicationsJson, monthlyCsv, vehiclesCsv, rulesCsv] = await Promise.all([
+      publicationsResponse.json(),
+      monthlyResponse.text(),
+      vehiclesResponse.text(),
+      rulesResponse.ok ? rulesResponse.text() : Promise.resolve(""),
+    ]);
 
-      if (looksLikeHtml(publicationsCsv)) throw new Error(`A aba ${PUBLICATIONS_SHEET} não retornou CSV.`);
-      if (looksLikeHtml(monthlyCsv)) throw new Error(`A aba ${MONTHLY_SHEET} não retornou CSV.`);
-      if (looksLikeHtml(vehiclesCsv)) throw new Error(`A aba ${VEHICLES_SHEET} não retornou CSV.`);
-
-      const normalizedPublications = rowsToObjects(parseCSV(publicationsCsv))
-        .map(normalizePublication)
-        .filter((item) => item.title || item.vehicle);
-
-      const normalizedMonthly = rowsToObjects(parseCSV(monthlyCsv)).map(normalizeMonthly).filter(Boolean);
-      const normalizedVehicles = rowsToObjects(parseCSV(vehiclesCsv)).map(normalizeVehicle).filter(Boolean);
-      const normalizedRules = rulesCsv ? rowsToObjects(parseCSV(rulesCsv)) : [];
-
-      setPublications(normalizedPublications);
-      if (normalizedMonthly.length) setMonthlyData(normalizedMonthly);
-      setVehicles(normalizedVehicles);
-      setRules(normalizedRules);
-
-      setLastUpdated(new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }));
-    } catch (error) {
-      setLoadError(error.message || "Não foi possível carregar os dados.");
-    } finally {
-      setIsLoading(false);
+    if (!publicationsJson.ok) {
+      throw new Error(publicationsJson.error || "A API de publicações não retornou dados válidos.");
     }
+
+    const looksLikeHtml = (text) =>
+      String(text || "").trim().startsWith("<") ||
+      String(text || "").includes("<html");
+
+    if (looksLikeHtml(monthlyCsv)) throw new Error(`A aba ${MONTHLY_SHEET} não retornou CSV.`);
+    if (looksLikeHtml(vehiclesCsv)) throw new Error(`A aba ${VEHICLES_SHEET} não retornou CSV.`);
+
+    const normalizedPublications = (publicationsJson.publications || [])
+      .map(normalizeSupabasePublication)
+      .filter((item) => item.title || item.vehicle);
+
+    const normalizedMonthly = rowsToObjects(parseCSV(monthlyCsv))
+      .map(normalizeMonthly)
+      .filter(Boolean);
+
+    const normalizedVehicles = rowsToObjects(parseCSV(vehiclesCsv))
+      .map(normalizeVehicle)
+      .filter(Boolean);
+
+    const normalizedRules = rulesCsv ? rowsToObjects(parseCSV(rulesCsv)) : [];
+
+    setPublications(normalizedPublications);
+    if (normalizedMonthly.length) setMonthlyData(normalizedMonthly);
+    setVehicles(normalizedVehicles);
+    setRules(normalizedRules);
+
+    setLastUpdated(
+      `${new Date().toLocaleString("pt-BR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      })} · publicações via Supabase`
+    );
+  } catch (error) {
+    setLoadError(error.message || "Não foi possível carregar os dados.");
+  } finally {
+    setIsLoading(false);
   }
+}
+
+  
 
   useEffect(() => {
     loadData();
@@ -1876,7 +2014,7 @@ export default function PRDashboard() {
                 <Card className="p-5">
                   <SectionTitle>Fontes atuais</SectionTitle>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {[PUBLICATIONS_SHEET, MONTHLY_SHEET, VEHICLES_SHEET, RULES_SHEET, "Google Sheets direto"].map((field) => (
+                    {["Supabase · publicacoes", MONTHLY_SHEET, VEHICLES_SHEET, RULES_SHEET, "Google Sheets parcial"].map((field) => (
                       <span key={field} className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs text-amber-100">
                         {field}
                       </span>

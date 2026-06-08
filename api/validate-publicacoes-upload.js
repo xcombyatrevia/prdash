@@ -100,18 +100,17 @@ function normalizeText(value = "") {
     .trim();
 }
 
-function normalizeHeader(value = "") {
-  return normalizeText(value)
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_|_$/g, "");
-}
-
 function isBlank(value) {
   return value === null || value === undefined || String(value).trim() === "";
 }
 
 function isBlankRow(row) {
   return row.every((cell) => isBlank(cell));
+}
+
+function normalizeUrl(value) {
+  const url = String(value || "").trim();
+  return url || null;
 }
 
 function parseNumber(value) {
@@ -177,7 +176,6 @@ function parseDate(value) {
   if (isBlank(value)) return null;
 
   const raw = String(value).trim().split(" ")[0];
-
   const delimiter = ["/", "-", "."].find((item) => raw.includes(item));
 
   if (delimiter) {
@@ -246,7 +244,44 @@ function getCell(row, columnMap, field) {
   return row[index] ?? "";
 }
 
-function normalizeRow(row, columnMap, originalHeaders, rowNumber) {
+function getCellHyperlink(worksheet, rowNumber, columnIndex) {
+  if (!worksheet) return null;
+  if (columnIndex === undefined || columnIndex === null) return null;
+
+  const cellAddress = XLSX.utils.encode_cell({
+    r: rowNumber - 1,
+    c: columnIndex,
+  });
+
+  const cell = worksheet[cellAddress];
+
+  if (!cell || !cell.l) return null;
+
+  const target = cell.l.Target || cell.l.target || "";
+  return String(target || "").trim() || null;
+}
+
+function getUrlFromRow(row, columnMap, worksheet, rowNumber) {
+  const explicitUrl = String(getCell(row, columnMap, "url") || "").trim();
+
+  if (explicitUrl) {
+    return explicitUrl;
+  }
+
+  const titleColumnIndex = columnMap.titulo;
+  const titleHyperlink = getCellHyperlink(worksheet, rowNumber, titleColumnIndex);
+
+  return titleHyperlink || null;
+}
+
+function sanitizeJsonValue(value) {
+  if (value instanceof Date) return value.toISOString();
+  if (value === undefined) return null;
+  if (Number.isNaN(value)) return null;
+  return value;
+}
+
+function normalizeRow(row, columnMap, originalHeaders, rowNumber, clientId, origemArquivo, worksheet) {
   const titulo = String(getCell(row, columnMap, "titulo") || "").trim();
   const veiculo = String(getCell(row, columnMap, "veiculo") || "").trim();
   const dataPublicacaoRaw = getCell(row, columnMap, "data_publicacao");
@@ -254,11 +289,15 @@ function normalizeRow(row, columnMap, originalHeaders, rowNumber) {
 
   const rawData = {};
   originalHeaders.forEach((header, index) => {
-    if (!isBlank(header)) rawData[String(header)] = row[index] ?? "";
+    if (!isBlank(header)) {
+      rawData[String(header)] = sanitizeJsonValue(row[index] ?? "");
+    }
   });
 
-  const normalized = {
-    client_id: null,
+  const url = normalizeUrl(getUrlFromRow(row, columnMap, worksheet, rowNumber));
+
+  return {
+    client_id: clientId,
     linha_original: rowNumber,
     titulo,
     veiculo,
@@ -277,17 +316,9 @@ function normalizeRow(row, columnMap, originalHeaders, rowNumber) {
     audiencia: parseInteger(getCell(row, columnMap, "audiencia")),
     tier: String(getCell(row, columnMap, "tier") || "").trim() || null,
     sentimento: String(getCell(row, columnMap, "sentimento") || "").trim() || null,
-    url: String(getCell(row, columnMap, "url") || "").trim() || null,
+    url,
+    origem_arquivo: origemArquivo,
     raw_data: rawData,
-  };
-
-  return {
-    normalized,
-    raw: {
-      titulo,
-      veiculo,
-      dataPublicacaoRaw,
-    },
   };
 }
 
@@ -371,10 +402,7 @@ function validateWorkbook({ workbook, sheetName, clientId, clientName, fileName 
         recognized: recognizedFields,
         missingRequired,
         missingOptional,
-        extra: headers
-          .map((header) => String(header || "").trim())
-          .filter(Boolean)
-          .filter((header) => !recognizedFields.includes(normalizeHeader(header))),
+        extra: headers.filter(Boolean),
       },
     };
   }
@@ -384,6 +412,9 @@ function validateWorkbook({ workbook, sheetName, clientId, clientName, fileName 
   const validRows = [];
   let ignoredEmptyRows = 0;
   let rowsWithWarnings = 0;
+  let rowsWithUrlFromTitle = 0;
+  let rowsWithExplicitUrl = 0;
+  let rowsWithoutUrl = 0;
 
   const dataRows = rows.slice(headerIndex + 1);
 
@@ -395,8 +426,18 @@ function validateWorkbook({ workbook, sheetName, clientId, clientName, fileName 
       return;
     }
 
-    const { normalized, raw } = normalizeRow(row, columnMap, headers, rowNumber);
-    normalized.client_id = clientId;
+    const explicitUrl = String(getCell(row, columnMap, "url") || "").trim();
+    const titleHyperlink = getCellHyperlink(worksheet, rowNumber, columnMap.titulo);
+
+    const normalized = normalizeRow(
+      row,
+      columnMap,
+      headers,
+      rowNumber,
+      clientId,
+      fileName,
+      worksheet
+    );
 
     const rowErrors = [];
 
@@ -416,17 +457,11 @@ function validateWorkbook({ workbook, sheetName, clientId, clientName, fileName 
       });
     }
 
-    if (isBlank(raw.dataPublicacaoRaw)) {
+    if (!normalized.data_publicacao) {
       rowErrors.push({
         row: rowNumber,
         field: "Data de Publicação",
-        message: "Data de Publicação ausente.",
-      });
-    } else if (!normalized.data_publicacao) {
-      rowErrors.push({
-        row: rowNumber,
-        field: "Data de Publicação",
-        message: "Data de Publicação inválida.",
+        message: "Data de Publicação ausente ou inválida.",
       });
     }
 
@@ -435,9 +470,21 @@ function validateWorkbook({ workbook, sheetName, clientId, clientName, fileName 
       return;
     }
 
+    if (normalized.url && explicitUrl) rowsWithExplicitUrl += 1;
+    else if (normalized.url && titleHyperlink) rowsWithUrlFromTitle += 1;
+    else rowsWithoutUrl += 1;
+
     let hadWarning = false;
 
     for (const field of OPTIONAL_FIELDS) {
+      if (field === "url") {
+        if (!normalized.url) {
+          incrementWarning(warningsByField, field, rowNumber, `URL vazia e sem hyperlink no título.`);
+          hadWarning = true;
+        }
+        continue;
+      }
+
       if (columnMap[field] === undefined) continue;
 
       const value = normalized[field];
@@ -484,6 +531,9 @@ function validateWorkbook({ workbook, sheetName, clientId, clientName, fileName 
       ignoredEmptyRows,
       rowsWithErrors: errors.length,
       rowsWithWarnings,
+      rowsWithExplicitUrl,
+      rowsWithUrlFromTitle,
+      rowsWithoutUrl,
     },
     columns: {
       recognized: recognizedFields,
@@ -600,6 +650,7 @@ export default async function handler(req, res) {
     return res.status(500).json({
       ok: false,
       error: error.message || "Erro inesperado ao validar arquivo.",
+      stack: error.stack || null,
     });
   }
 }

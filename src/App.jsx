@@ -1336,13 +1336,17 @@ async function requestUploadValidation(mode) {
           </div>
 
           <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-white/10 pt-4">
+
             <button
+              type="button"
               onClick={cancelImport}
               className="rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:bg-white/5"
             >
               Cancelar importação
             </button>
+            
             <button
+              type="button"
               onClick={confirmImport}
               disabled={isImporting || !validationResult}
               className="flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-300/15 disabled:opacity-50"
@@ -1350,6 +1354,7 @@ async function requestUploadValidation(mode) {
               <CheckCircle size={17} />
               {isImporting ? "Importando..." : "Confirmar importação"}
             </button>
+            
           </div>
         </Card>
       )}
@@ -1365,11 +1370,11 @@ async function requestUploadValidation(mode) {
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
             {[
-              ["Processadas", importSummary.processedRows],
-              ["Não processadas", importSummary.notProcessed],
               ["Importadas", importSummary.imported],
               ["Atualizadas", importSummary.updated],
+              ["Ignoradas", importSummary.ignored],
               ["Com erro", importSummary.importErrors],
+              ["Importação", importResult.importId || "—"],
             ].map(([label, value]) => (
               <div key={label} className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>

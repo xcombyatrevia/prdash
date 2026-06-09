@@ -687,6 +687,12 @@ function calculateValuation(publication, vehicleIndex, aiAnalysis = null) {
   } else if (type === "digital") {
     const reach = publicationReach || vehicleReach;
 
+  if (!vehicle) {
+    status = "Veículo não encontrado";
+    source = "Sem correspondência na aba Veiculos";
+  } else if (type === "digital") {
+    const reach = publicationReach || vehicleReach;
+  
     if (reach && vehicle.cpm) {
       baseValue = (reach / 1000) * vehicle.cpm;
       source = publicationReach
@@ -717,9 +723,6 @@ function calculateValuation(publication, vehicleIndex, aiAnalysis = null) {
       status = "Dados insuficientes";
       source = "Falta duração da inserção ou Valor_30s";
     }
-  }
-
-    
   } else {
     status = "Dados insuficientes";
     source = "Tipo de mídia sem regra aplicável";
@@ -2146,7 +2149,7 @@ export default function PRDashboard() {
               <img
                 src="/logoxcomatreviapreto.jpg"
                 alt="XCOM by ATREVIA"
-                className="mb-5 h-12 w-auto"
+                className="mb-5 h-12 w-auto" 
               />
               <div className="flex flex-wrap items-center gap-4">
                 <h1 className="font-serif text-4xl text-white md:text-5xl">Resultados de Mídia</h1>

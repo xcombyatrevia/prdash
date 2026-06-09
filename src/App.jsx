@@ -556,24 +556,84 @@ function normalizeSupabaseMonthly(row) {
 }
 
 function normalizeVehicle(row) {
-  const vehicle = getValue(row, ["Veiculo", "Veículo", "Nome", "Nome do Veículo", "Nome do Veiculo"]);
+  const vehicle =
+    row.vehicle ||
+    row.name ||
+    row.nome ||
+    getValue(row, ["Veiculo", "Veículo", "Nome", "Nome do Veículo", "Nome do Veiculo"]);
+
   if (!vehicle) return null;
 
   return {
-    id: getValue(row, ["ID_Veiculo", "ID Veiculo", "Id", "ID"]),
+    id:
+      row.id ||
+      row.vehicleId ||
+      row.id_veiculo ||
+      getValue(row, ["ID_Veiculo", "ID Veiculo", "Id", "ID"]),
+
     vehicle,
-    mediaType: getValue(row, ["Tipo_Midia", "Tipo Midia", "Tipo de mídia", "Tipo de midia", "Tipo"]),
-    segment: getValue(row, ["Segmento"]),
-    market: getValue(row, ["Praca", "Praça", "Cidade", "UF"]),
-    tier: getValue(row, ["Tier"]),
+
+    mediaType:
+      row.mediaType ||
+      row.tipoMidia ||
+      row.tipo_midia ||
+      getValue(row, ["Tipo_Midia", "Tipo Midia", "Tipo de mídia", "Tipo de midia", "Tipo"]),
+
+    segment:
+      row.segment ||
+      row.segmento ||
+      getValue(row, ["Segmento"]),
+
+    market:
+      row.market ||
+      row.praca ||
+      getValue(row, ["Praca", "Praça", "Cidade", "UF"]),
+
+    tier:
+      row.tier ||
+      getValue(row, ["Tier"]),
+
     audience: parseNumber(
-      getValue(row, ["Audiencia_Estimada", "Audiência Estimada", "Audiencia Estimada", "Audiencia", "Audiência", "Alcance"])
+      row.audience ||
+        row.audiencia ||
+        getValue(row, ["Audiencia_Estimada", "Audiência Estimada", "Audiencia Estimada", "Audiencia", "Audiência", "Alcance"])
     ),
-    cpm: parseNumber(getValue(row, ["CPM_Ref", "CPM Ref", "CPM", "Cpm"])),
-    pageValue: parseNumber(getValue(row, ["Valor_Pagina", "Valor Página", "Valor Pagina", "Valor de página", "Valor de pagina"])),
-    cmValue: parseNumber(getValue(row, ["Valor_CM_Coluna", "Valor CM Coluna", "Valor_CM", "Valor CM", "Valor cm/coluna"])),
-    value30s: parseNumber(getValue(row, ["Valor_30s", "Valor 30s", "Valor 30 segundos", "Valor_30"])),
-    updated: getValue(row, ["Dados atualizados", "Dados Atualizados", "Atualizado"]),
+
+    cpm: parseNumber(
+      row.cpm ||
+        row.cpmRef ||
+        row.cpm_ref ||
+        getValue(row, ["CPM_Ref", "CPM Ref", "CPM", "Cpm"])
+    ),
+
+    pageValue: parseNumber(
+      row.pageValue ||
+        row.valorPagina ||
+        row.valor_pagina ||
+        getValue(row, ["Valor_Pagina", "Valor Página", "Valor Pagina", "Valor de página", "Valor de pagina"])
+    ),
+
+    cmValue: parseNumber(
+      row.cmValue ||
+        row.valorCm ||
+        row.valor_cm ||
+        getValue(row, ["Valor_CM_Coluna", "Valor CM Coluna", "Valor_CM", "Valor CM", "Valor cm/coluna"])
+    ),
+
+    value30s: parseNumber(
+      row.value30s ||
+        row.valorSegundo ||
+        row.valor_segundo ||
+        getValue(row, ["Valor_30s", "Valor 30s", "Valor 30 segundos", "Valor_30"])
+    ),
+
+    updated:
+      row.dadosAtualizados ||
+      row.dados_atualizados ||
+      row.updated ||
+      getValue(row, ["Dados atualizados", "Dados Atualizados", "Atualizado"]),
+
+    raw: row.rawData || row.raw || row,
   };
 }
 
@@ -649,8 +709,17 @@ function calculateValuation(publication, vehicleIndex, aiAnalysis = null) {
       source = "Falta Cm/Valor_CM_Coluna ou Valor_Pagina";
     }
   } else if (type === "tv" || type === "radio") {
-    status = "Dados insuficientes";
-    source = "Falta duração da inserção ou Valor_30s";
+    if (vehicle.value30s) {
+      baseValue = vehicle.value30s;
+      source = "Valor_30s do veículo usado como referência inicial";
+      status = "Calculado · 30s padrão";
+    } else {
+      status = "Dados insuficientes";
+      source = "Falta duração da inserção ou Valor_30s";
+    }
+  }
+
+    
   } else {
     status = "Dados insuficientes";
     source = "Tipo de mídia sem regra aplicável";

@@ -2117,13 +2117,25 @@ export default function PRDashboard() {
   return (
     <div className="min-h-screen bg-[#030b13] text-slate-100">
       <div className="flex">
-        <aside className="hidden min-h-screen w-48 shrink-0 border-r border-white/10 bg-black/30 px-4 py-8 lg:block">
-          <div className="mb-12 ml-16 h-8 w-1 rounded bg-amber-300" />
 
+        <aside className="hidden min-h-screen w-64 shrink-0 border-r border-white/10 bg-black/30 px-4 py-6 lg:block">
+          <button
+            type="button"
+            onClick={() => setActivePage("Visão Geral")}
+            className="mb-10 block transition hover:opacity-80"
+            aria-label="Voltar para a visão geral"
+          >
+            <img
+              src="/logoxcomatreviapreto.jpg"
+              alt="XCOM by ATREVIA"
+              className="h-auto w-44 object-contain"
+            />
+          </button>
+        
           <nav className="space-y-3">
             {navItems.map(([Icon, label]) => {
               const active = activePage === label;
-
+        
               return (
                 <button
                   key={label}
@@ -2141,14 +2153,12 @@ export default function PRDashboard() {
           </nav>
         </aside>
 
+        
+
+
         <main className="w-full px-6 py-6 lg:px-9">
           <header className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
-              <img
-                src="/logoxcomatreviapreto.jpg"
-                alt="XCOM by ATREVIA"
-                className="mb-5 h-12 w-auto" 
-              />
               <div className="flex flex-wrap items-center gap-4">
                 <h1 className="font-serif text-4xl text-white md:text-5xl">Resultados de Mídia</h1>
                 <span className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-300">Relatório</span>

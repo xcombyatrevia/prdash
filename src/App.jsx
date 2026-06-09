@@ -975,21 +975,6 @@ function AiAnalysisCard({ selectedPublication = null }) {
     setHttpStatus("");
   }, [selectedPublication]);
 
-  const finalAiFactor = useMemo(() => {
-    const analysis = result?.analysis;
-    if (!analysis) return null;
-
-    const factors = [
-      analysis.presence?.factor,
-      analysis.highlight?.factor,
-      analysis.protagonism?.factor,
-      analysis.tone?.factor,
-    ].map((value) => Number(value));
-
-    if (factors.some((value) => Number.isNaN(value))) return null;
-    return factors.reduce((acc, value) => acc * value, 1);
-  }, [result]);
-
   async function analyze() {
     setLoading(true);
     setError("");
@@ -1044,9 +1029,22 @@ function AiAnalysisCard({ selectedPublication = null }) {
     }
   }
 
-  const analysis = result?.analysis;
+  const analysis = result?.reputationAnalysis || result?.analysis;
   const fullText = result?.fullExtractedText || result?.extraction?.fullText || result?.extraction?.fullExtractedText || "";
-
+  
+  const reputationItems = analysis
+    ? [
+        ["Tom da publicação", analysis.publicationTone],
+        ["Protagonismo da marca", analysis.brandProtagonism],
+        ["Aderência à mensagem-chave", analysis.keyMessageAdherence],
+        ["Aderência aos valores da marca", analysis.brandValuesAdherence],
+        ["Contexto reputacional", analysis.reputationalContext],
+        ["Risco reputacional", analysis.reputationalRisk],
+        ["Presença de porta-voz", analysis.spokespersonPresence],
+        ["Menção no título/subtítulo", analysis.titleOrSubtitleMention],
+      ]
+    : [];
+ 
   return (
     <Card className="p-5">
       <div className="flex flex-col gap-4 border-b border-white/10 pb-4 md:flex-row md:items-start md:justify-between">
@@ -1130,43 +1128,69 @@ function AiAnalysisCard({ selectedPublication = null }) {
         </div>
       )}
 
-      {analysis && (
+      {reputationItems.length > 0 && (
         <>
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-            {[
-              ["Presença", analysis.presence],
-              ["Destaque", analysis.highlight],
-              ["Protagonismo", analysis.protagonism],
-              ["Tom", analysis.tone],
-            ].map(([label, item]) => (
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {reputationItems.map(([label, item]) => (
               <div key={label} className="rounded-xl border border-white/10 bg-slate-950/50 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-                <p className="mt-2 text-lg font-semibold text-white">{item?.category}</p>
-                <p className="mt-1 text-sm text-cyan-200">Fator {item?.factor}</p>
-                <p className="mt-3 text-xs leading-relaxed text-slate-400">{item?.justification}</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  {label}
+                </p>
+      
+                <p className="mt-2 font-serif text-3xl text-white">
+                  {Number(item?.score || 0).toLocaleString("pt-BR")}
+                </p>
+      
+                <p className="mt-1 text-sm text-cyan-200">
+                  {item?.label || "sem classificação"}
+                </p>
+      
+                <p className="mt-3 text-xs leading-relaxed text-slate-400">
+                  {item?.justification || "Sem justificativa retornada."}
+                </p>
               </div>
             ))}
           </div>
-
-          <div className="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-4">
-            <p className="text-xs uppercase tracking-wide text-emerald-100">Fator editorial final da IA</p>
-            <p className="mt-2 font-serif text-3xl text-white">
-              {finalAiFactor !== null
-                ? finalAiFactor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                : "—"}
-            </p>
-            <p className="mt-2 text-sm text-emerald-50/80">
-              presença × destaque × protagonismo × tom
-            </p>
-          </div>
+      
+          {result?.summary && (
+            <div className="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+              <p className="text-xs uppercase tracking-wide text-emerald-100">
+                Leitura geral da IA
+              </p>
+      
+              <p className="mt-2 text-sm leading-relaxed text-emerald-50/90">
+                {result.summary.overallReading || "Sem leitura geral retornada."}
+              </p>
+      
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-emerald-100/70">
+                    Principal força
+                  </p>
+                  <p className="mt-1 text-sm text-white">
+                    {result.summary.mainStrength || "Não informado."}
+                  </p>
+                </div>
+      
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-emerald-100/70">
+                    Principal risco
+                  </p>
+                  <p className="mt-1 text-sm text-white">
+                    {result.summary.mainRisk || "Não informado."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
-      {analysis?.evidence?.length > 0 && (
+      {result?.evidence?.length > 0 && (
         <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-4">
           <p className="text-xs uppercase tracking-wide text-slate-500">Evidências literais</p>
           <ul className="mt-2 space-y-2 text-sm text-slate-300">
-            {analysis.evidence.map((item, index) => (
+            {result.evidence.map((item, index) => (
               <li key={`${item}-${index}`}>“{item}”</li>
             ))}
           </ul>

@@ -2039,8 +2039,8 @@ export default function PRDashboard() {
           <header className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-4">
-                <h1 className="font-serif text-4xl text-white md:text-5xl">Dashboard de Resultados de PR</h1>
-                <span className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-300">Relatório mensal</span>
+                <h1 className="font-serif text-4xl text-white md:text-5xl">Resultados de Mídia</h1>
+                <span className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-300">Relatório</span>
               </div>
               <p className="mt-1 text-xl text-slate-300">
                 {selectedClient?.nome || selectedClient?.name || "Cliente selecionado"} — dados dinâmicos por período

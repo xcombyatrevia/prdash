@@ -804,6 +804,39 @@ export default async function handler(req, res) {
       }
     }
 
+    const { data: clientData, error: clientError } = await supabase
+      .from("clientes")
+      .select("id, nome, name, nomes_marca, mensagens_chave, valores_marca")
+      .eq("id", clientId)
+      .maybeSingle();
+    
+    if (clientError) {
+      console.error("Erro ao buscar cliente:", clientError);
+    }
+    
+    const brandNames =
+      clientData?.nomes_marca ||
+      clientData?.nome ||
+      clientData?.name ||
+      clientName ||
+      "Marca não informada";
+    
+    const keyMessages =
+      clientData?.mensagens_chave ||
+      "Mensagens-chave não informadas. Avalie aderência apenas com base no posicionamento percebido na matéria.";
+    
+    const brandValues =
+      clientData?.valores_marca ||
+      "Valores da marca não informados. Avalie com base em atributos reputacionais gerais como confiança, inovação, qualidade, credibilidade, responsabilidade e liderança.";
+    
+    const finalClientName =
+      clientData?.nome ||
+      clientData?.name ||
+      clientName ||
+      clientId ||
+      "Cliente não informado";
+        
+
     const extracted = await extractTextFromUrl(url);
 
     if (debug) {

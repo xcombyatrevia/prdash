@@ -755,19 +755,27 @@ function KpiCard({ icon: Icon, label, value, helper, accent = "cyan" }) {
   };
 
   return (
-    <Card className="flex min-h-[150px] items-center gap-6 p-6">
-      <div className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-full border ${colorMap[accent]}`}>
-        <Icon size={38} strokeWidth={1.6} />
+    <Card className="flex min-h-[140px] items-center gap-5 p-5">
+      <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border ${colorMap[accent]}`}>
+        <Icon size={30} strokeWidth={1.6} />
       </div>
-      <div>
-        <p className="text-xs uppercase tracking-wide text-slate-300">{label}</p>
-        <p className="mt-2 font-serif text-5xl leading-none text-white">{value}</p>
-        <p className="mt-2 text-sm text-slate-300">{helper}</p>
+
+      <div className="min-w-0">
+        <p className="text-[11px] uppercase leading-snug tracking-wide text-slate-300">
+          {label}
+        </p>
+
+        <p className="mt-2 break-words font-serif text-4xl leading-tight text-white xl:text-[2.6rem]">
+          {value}
+        </p>
+
+        <p className="mt-1 text-xs leading-relaxed text-slate-300">
+          {helper}
+        </p>
       </div>
     </Card>
   );
 }
-
 function MonthlyComboChart({ data, lineDataKey, lineLabel, lineColor, lineValueFormatter, lineAxisFormatter }) {
   return (
     <div className="h-64">

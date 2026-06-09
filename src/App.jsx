@@ -683,16 +683,10 @@ function calculateValuation(publication, vehicleIndex, aiAnalysis = null) {
 
   if (!vehicle) {
     status = "Veículo não encontrado";
-    source = "Sem correspondência na aba Veiculos";
+    source = "Sem correspondência na tabela veiculos";
   } else if (type === "digital") {
     const reach = publicationReach || vehicleReach;
 
-  if (!vehicle) {
-    status = "Veículo não encontrado";
-    source = "Sem correspondência na aba Veiculos";
-  } else if (type === "digital") {
-    const reach = publicationReach || vehicleReach;
-  
     if (reach && vehicle.cpm) {
       baseValue = (reach / 1000) * vehicle.cpm;
       source = publicationReach
@@ -738,7 +732,11 @@ function calculateValuation(publication, vehicleIndex, aiAnalysis = null) {
       valuationDefaults.protagonismoFactor *
       valuationDefaults.tomFactor;
 
-  const canCalculate = status === "Calculado" || status === "Calculado · página padrão";
+  const canCalculate =
+    status === "Calculado" ||
+    status === "Calculado · página padrão" ||
+    status === "Calculado · 30s padrão";
+
   const newValuation = canCalculate ? baseValue * factor : 0;
 
   return {
@@ -2305,7 +2303,7 @@ export default function PRDashboard() {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <SectionTitle>Alcance mês a mês</SectionTitle>
-                      <p className="mt-1 text-sm text-slate-400">Base CLIENTEXMENSAIS · histórico independente do filtro</p>
+                      <p className="mt-1 text-sm text-slate-400">Base Supabase · dados_mensais · histórico independente do filtro</p>
                     </div>
                     <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs text-amber-100">
                       Audiência

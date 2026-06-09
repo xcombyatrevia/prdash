@@ -2110,12 +2110,13 @@ export default function PRDashboard() {
                   <RefreshCw size={17} className={isLoading ? "animate-spin" : ""} />
                   {isLoading ? "Carregando..." : "Carregar dados"}
                 </button>
+                
+                <p className="mt-2 text-xs text-slate-500">
+                  Última atualização: <span className="text-slate-300">{lastUpdated}</span>
+                </p>
+                
               </div>
             </div>
-
-            <p className="mt-2 text-xs text-slate-500">
-              Última atualização: <span className="text-slate-300">{lastUpdated}</span>
-            </p>
 
 
           </header>

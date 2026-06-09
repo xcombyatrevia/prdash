@@ -2025,14 +2025,6 @@ export default function PRDashboard() {
               );
             })}
           </nav>
-
-          <div className="absolute bottom-8 left-5 rounded-xl border border-white/10 bg-slate-900/80 p-4 text-xs text-slate-300">
-            <Calendar size={20} className="mb-3 text-slate-300" />
-            <p>Última atualização</p>
-            <p className="mt-2">
-              <span className="text-emerald-400">●</span> {lastUpdated}
-            </p>
-          </div>
         </aside>
 
         <main className="w-full px-6 py-6 lg:px-9">
@@ -2121,10 +2113,11 @@ export default function PRDashboard() {
               </div>
             </div>
 
+            <p className="mt-2 text-xs text-slate-500">
+              Última atualização: <span className="text-slate-300">{lastUpdated}</span>
+            </p>
 
 
-
-            
           </header>
 
           {loadError && (

@@ -2047,82 +2047,84 @@ export default function PRDashboard() {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={() => loadData(selectedClientId)}
-                disabled={!selectedClientId || isLoading}
-                className="flex items-center gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/15 disabled:opacity-60"
-              >
-                <RefreshCw size={17} className={isLoading ? "animate-spin" : ""} />
-                {isLoading ? "Carregando..." : "Carregar dados"}
-              </button>
-
-              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-xs text-slate-400">
-                <span className="max-w-[180px] truncate">{authUser?.email}</span>
+            <div className="flex w-full flex-col gap-3 xl:w-auto xl:min-w-[620px]">
+              <div className="flex w-full items-center justify-between gap-3">
+                <select
+                  value={selectedClientId}
+                  onChange={(event) => {
+                    const nextClientId = event.target.value;
+                    const nextClient = clients.find((client) => client.id === nextClientId) || null;
+            
+                    setSelectedClientId(nextClientId);
+                    setSelectedClient(nextClient);
+            
+                    if (nextClientId) {
+                      loadData(nextClientId);
+                    }
+                  }}
+                  className="h-12 min-w-[220px] rounded-xl border border-white/10 bg-slate-950/80 px-4 text-sm text-slate-100 outline-none transition focus:border-cyan-300/50"
+                >
+                  <option value="">Selecione um cliente</option>
+            
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.nome || client.name || client.id}
+                    </option>
+                  ))}
+                </select>
+            
+                <div className="ml-auto flex h-12 items-center gap-3 rounded-xl border border-white/10 bg-slate-950/70 px-4 text-sm text-slate-200">
+                  <span className="max-w-[260px] truncate text-slate-300">
+                    {authUser?.email}
+                  </span>
+            
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-100 transition hover:bg-white/10"
+                  >
+                    Sair
+                  </button>
+                </div>
+              </div>
+            
+              <div className="flex w-full flex-wrap items-center justify-end gap-3">
+                <label className="flex h-12 items-center gap-3 rounded-xl border border-white/10 bg-slate-950/70 px-4 text-xs text-slate-400">
+                  <span>Início</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(event) => setStartDate(event.target.value)}
+                    className="bg-transparent text-sm text-slate-100 outline-none"
+                  />
+                </label>
+            
+                <label className="flex h-12 items-center gap-3 rounded-xl border border-white/10 bg-slate-950/70 px-4 text-xs text-slate-400">
+                  <span>Fim</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(event) => setEndDate(event.target.value)}
+                    className="bg-transparent text-sm text-slate-100 outline-none"
+                  />
+                </label>
+            
                 <button
                   type="button"
-                  onClick={handleLogout}
-                  className="rounded-md border border-white/10 px-2 py-1 text-slate-200 transition hover:bg-white/5"
+                  onClick={() => loadData(selectedClientId)}
+                  disabled={!selectedClientId || isLoading}
+                  className="flex h-12 items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-300/10 px-5 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/15 disabled:opacity-60"
                 >
-                  Sair
+                  <RefreshCw size={17} className={isLoading ? "animate-spin" : ""} />
+                  {isLoading ? "Carregando..." : "Carregar dados"}
                 </button>
               </div>
-
-              <label className="rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-slate-400">
-                Início
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(event) => setStartDate(event.target.value)}
-                  className="ml-2 bg-transparent text-sm text-slate-100 outline-none"
-                />
-              </label>
-
-              <div className="flex flex-col gap-1">
-                
-              <label className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                Cliente
-              </label>
-            
-              <select
-                value={selectedClientId}
-                onChange={(event) => {
-                  const nextClientId = event.target.value;
-                  const nextClient = clients.find((client) => client.id === nextClientId) || null;
-            
-                  setSelectedClientId(nextClientId);
-                  setSelectedClient(nextClient);
-            
-                  if (nextClientId) {
-                    loadData(nextClientId);
-                  }
-                }}
-                className="rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/50"
-              >
-                <option value="">Selecione um cliente</option>
-            
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.nome || client.name || client.id}
-                  </option>
-                ))}
-              </select>
             </div>
 
-              <label className="rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-slate-400">
-                Fim
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(event) => setEndDate(event.target.value)}
-                  className="ml-2 bg-transparent text-sm text-slate-100 outline-none"
-                />
-              </label>
 
-              <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-200">
-                <Calendar size={18} /> {periodLabel}
-              </div>
-            </div>
+
+
+            
           </header>
 
           {loadError && (

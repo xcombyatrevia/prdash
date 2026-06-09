@@ -519,6 +519,42 @@ function normalizeMonthly(row) {
   };
 }
 
+function normalizeSupabaseMonthly(row) {
+  const year = parseNumber(row.year || row.ano);
+  const monthNumber = parseNumber(row.monthNumber || row.mes_numero);
+
+  if (!year || !monthNumber) return null;
+
+  const publications = parseNumber(
+    row.publications ||
+      row.totalPublications ||
+      row.total_publicacoes
+  );
+
+  const valuationRaw = parseNumber(
+    row.valuation ||
+      row.retornoMidia ||
+      row.retorno_midia
+  );
+
+  const reachRaw = parseNumber(
+    row.reach ||
+      row.alcance ||
+      row.audience ||
+      row.audiencia
+  );
+
+  return {
+    sortKey: `${year}-${String(monthNumber).padStart(2, "0")}`,
+    month: `${monthNames[monthNumber - 1] || monthNumber}/${String(year).slice(-2)}`,
+    year,
+    monthNumber,
+    publications,
+    mediaValue: valuationRaw / 1000000,
+    reach: reachRaw / 1000000,
+  };
+}
+
 function normalizeVehicle(row) {
   const vehicle = getValue(row, ["Veiculo", "Veículo", "Nome", "Nome do Veículo", "Nome do Veiculo"]);
   if (!vehicle) return null;
@@ -1650,7 +1686,7 @@ export default function PRDashboard() {
         .filter((item) => item.title || item.vehicle);
   
       const normalizedMonthly = (data.monthlyData || [])
-        .map(normalizeMonthly)
+        .map(normalizeSupabaseMonthly)
         .filter(Boolean);
   
       const normalizedVehicles = (data.vehicles || [])
@@ -1878,7 +1914,7 @@ export default function PRDashboard() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <SectionTitle>Valoração mês a mês</SectionTitle>
-          <p className="mt-1 text-sm text-slate-400">Base CLIENTEXMENSAIS · histórico independente do filtro</p>
+          <p className="mt-1 text-sm text-slate-400">Base Supabase · dados_mensais · histórico independente do filtro</p>
         </div>
         <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">
           Retorno de mídia

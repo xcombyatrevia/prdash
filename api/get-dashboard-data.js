@@ -217,12 +217,22 @@ function mapVehicle(row) {
     clientId: row.client_id || null,
     isGlobal: !row.client_id,
 
+    id_veiculo: row.id_veiculo || "",
+    vehicleId: row.id_veiculo || "",
+
     nome: row.nome || "",
     name: row.nome || "",
+    vehicle: row.nome || "",
 
     tipo_midia: row.tipo_midia || "",
     tipoMidia: row.tipo_midia || "",
     mediaType: row.tipo_midia || "",
+
+    segmento: row.segmento || "",
+    segment: row.segmento || "",
+
+    praca: row.praca || "",
+    market: row.praca || "",
 
     tier: row.tier || "",
 
@@ -235,14 +245,30 @@ function mapVehicle(row) {
     tiragem: row.tiragem || "",
     circulation: row.tiragem || "",
 
+    cpm_ref: toNumber(row.cpm_ref),
+    cpmRef: toNumber(row.cpm_ref),
+    cpm: toNumber(row.cpm_ref),
+
+    valor_pagina: toNumber(row.valor_pagina),
+    valorPagina: toNumber(row.valor_pagina),
+    pageValue: toNumber(row.valor_pagina),
+
     valor_cm: toNumber(row.valor_cm),
     valorCm: toNumber(row.valor_cm),
+    cmValue: toNumber(row.valor_cm),
 
     valor_segundo: toNumber(row.valor_segundo),
     valorSegundo: toNumber(row.valor_segundo),
+    value30s: toNumber(row.valor_segundo),
 
     regra: row.regra || "",
     rule: row.regra || "",
+
+    fonte_data: row.fonte_data || "",
+    fonteData: row.fonte_data || "",
+
+    dados_atualizados: row.dados_atualizados || "",
+    dadosAtualizados: row.dados_atualizados || "",
 
     ativo: row.ativo !== false,
     active: row.ativo !== false,

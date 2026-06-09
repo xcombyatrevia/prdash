@@ -2143,6 +2143,11 @@ export default function PRDashboard() {
         <main className="w-full px-6 py-6 lg:px-9">
           <header className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
+              <img
+                src="/logoxcomatreviapreto.jpg"
+                alt="XCOM by ATREVIA"
+                className="mb-5 h-12 w-auto"
+              />
               <div className="flex flex-wrap items-center gap-4">
                 <h1 className="font-serif text-4xl text-white md:text-5xl">Resultados de Mídia</h1>
                 <span className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-300">Relatório</span>

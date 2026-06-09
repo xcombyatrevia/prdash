@@ -479,7 +479,14 @@ async function extractTextFromUrl(url) {
   };
 }
 
-function buildSystemPrompt() {
+function buildSystemPrompt({
+  brandNames,
+  keyMessages,
+  brandValues,
+  title,
+  vehicle,
+  extractedText,
+}) {
   return `
 # PERSONA
 Você é uma IA especializada em análise reputacional de publicações jornalísticas para comunicação corporativa, PR e reputação de marca.
@@ -489,35 +496,36 @@ Sua tarefa é analisar o texto da matéria abaixo e retornar APENAS um JSON vál
 Avalie a matéria usando exclusivamente os 8 indicadores abaixo. Cada indicador deve retornar uma nota numérica de 0 a 100, um label textual e uma justificativa objetiva.
 
 # DADOS
-## NOMES DA MARCA: 
-${brandNames} 
 
-## MENSAGENS-CHAVE: 
-${keyMessages} 
+NOMES DA MARCA:
+${brandNames}
 
-## VALORES DA MARCA: 
-${brandValues} 
+MENSAGENS-CHAVE:
+${keyMessages}
 
-## TÍTULO DA PUBLICAÇÃO: 
-${title || "Título não informado"} 
+VALORES DA MARCA:
+${brandValues}
 
-## VEÍCULO: 
-${vehicle || "Veículo não informado"} 
+TÍTULO DA PUBLICAÇÃO:
+${title || "Título não informado"}
 
-## TEXTO DA MATÉRIA: 
+VEÍCULO:
+${vehicle || "Veículo não informado"}
+
+TEXTO DA MATÉRIA:
 ${extractedText}
 
-# INSTRUÇÕES IMPORTANTES:
+# INSTRUÇÕES IMPORTANTES
 
 - Considere como menção à marca qualquer ocorrência do nome oficial, apelido, sigla, marca relacionada ou variação listada em NOMES DA MARCA.
-- Ao avaliar aderência à mensagem-chave, compare o conteúdo da matéria com a lista em MENSAGENS-CHAVE.
-- Ao avaliar aderência aos valores da marca, compare o conteúdo da matéria com a lista em VALORES-DA-MARCA.
+- Ao avaliar aderência à mensagem-chave, compare o conteúdo da matéria com MENSAGENS-CHAVE.
+- Ao avaliar aderência aos valores da marca, compare o conteúdo da matéria com VALORES DA MARCA.
 - Não penalize a matéria por não citar literalmente todas as mensagens-chave. Avalie aderência semântica.
-- Não invente atributos, valores ou mensagens que não estejam no texto ou nos placeholders.
+- Não invente atributos, valores ou mensagens que não estejam no texto, em NOMES DA MARCA, em MENSAGENS-CHAVE ou em VALORES DA MARCA.
 - Se a marca for mencionada por apelido, sigla ou variação, trate como a mesma marca.
-- Se a matéria não mencionar nenhuma das variações da marca, reduza fortemente protagonismo, aderência e menção em título/subtítulo.
+- Se a matéria não mencionar nenhuma das variações de NOMES DA MARCA, reduza fortemente as notas de protagonismo, aderência à mensagem-chave, aderência aos valores e menção em título/subtítulo.
 
-# INDICADORES AVALIADOS:
+# INDICADORES AVALIADOS
 
 1. Tom da publicação
 Avalie a leitura semântica geral da matéria em relação à marca.
@@ -537,7 +545,7 @@ Critério:
 - sem menção relevante = 0
 
 3. Aderência à mensagem-chave
-Avalie se a matéria contempla as mensagens estratégicas listadas em <MENSAGENS-CHAVE>.
+Avalie se a matéria contempla as mensagens estratégicas listadas em MENSAGENS-CHAVE.
 Critério:
 - 100 = aderência muito forte às mensagens-chave
 - 70 a 90 = boa aderência
@@ -586,7 +594,7 @@ Critério:
 - corpo do texto = 30
 - sem destaque = 0
 
-# REGRAS DE RESPOSTA:
+# REGRAS DE RESPOSTA
 
 - Retorne somente JSON válido.
 - Todas as notas devem ser números entre 0 e 100.
@@ -597,7 +605,7 @@ Critério:
 - Se a informação não estiver clara, atribua uma nota conservadora e explique a limitação.
 - O JSON deve seguir exatamente a estrutura abaixo.
 
-# ESTRUTURA OBRIGATÓRIA DO JSON:
+# ESTRUTURA OBRIGATÓRIA DO JSON
 
 {
   "reputationAnalysis": {
@@ -655,6 +663,7 @@ Critério:
   "evidence": []
 }
 `;
+}
 
 function parseModelJson(content = "") {
   const raw = String(content || "").trim();
@@ -681,17 +690,69 @@ function parseModelJson(content = "") {
   return JSON.parse(candidate);
 }
 
-function calculateAiFinalFactor(analysis) {
-  if (!analysis) return null;
+function calculateAiFinalFactor() {
+  // Os novos indicadores retornam scores de 0 a 100.
+  // O cálculo de IER-Buzz e IER-Quali será feito em etapa separada.
+  return null;
+}
 
-  const presence = Number(analysis.presence?.factor ?? 0);
-  const highlight = Number(analysis.highlight?.factor ?? 0);
-  const protagonism = Number(analysis.protagonism?.factor ?? 0);
-  const tone = Number(analysis.tone?.factor ?? 0);
+function getNewAnalysisFromParsed(parsed) {
+  return parsed?.reputationAnalysis || parsed?.analysis || null;
+}
 
-  if (!presence || !highlight || !protagonism || !tone) return null;
+function buildBrandInputsUsed(parsed, { brandNames, keyMessages, brandValues }) {
+  return parsed?.brandInputsUsed || {
+    brandNames,
+    keyMessagesConsidered: keyMessages,
+    brandValuesConsidered: brandValues,
+  };
+}
 
-  return presence * highlight * protagonism * tone;
+function buildCachedResponseFromRawContent(savedRow) {
+  if (!savedRow?.raw_content) return null;
+
+  try {
+    const parsed = parseModelJson(savedRow.raw_content);
+    const reputationAnalysis = getNewAnalysisFromParsed(parsed);
+
+    if (!reputationAnalysis?.publicationTone) return null;
+
+    return {
+      status: "ok",
+      source: "supabase_cache",
+      extraction: {
+        title: savedRow.extracted_title,
+        textLength: savedRow.text_length,
+        preview: String(savedRow.extracted_text || "").slice(0, 1000),
+        fullText: savedRow.extracted_text,
+        sourceUrl: savedRow.extraction_source_url,
+        extractionMethod: savedRow.extraction_method,
+        diagnostics: savedRow.diagnostics,
+      },
+      analysis: reputationAnalysis,
+      reputationAnalysis,
+      summary: parsed.summary || null,
+      brandInputsUsed: parsed.brandInputsUsed || null,
+      evidence: parsed.evidence || [],
+      aiFinalFactor: null,
+      debug: {
+        rawContent: savedRow.raw_content,
+        usage: {
+          prompt_tokens: savedRow.prompt_tokens,
+          completion_tokens: savedRow.completion_tokens,
+          total_tokens: savedRow.total_tokens,
+        },
+        model: savedRow.model,
+        cachedFromSupabase: true,
+        savedAt: savedRow.created_at,
+        publicationId: savedRow.publication_id,
+        titleSnapshot: savedRow.title_snapshot,
+        vehicleSnapshot: savedRow.vehicle_snapshot,
+      },
+    };
+  } catch {
+    return null;
+  }
 }
 
 function buildExtractionPayload(extracted) {
@@ -703,65 +764,6 @@ function buildExtractionPayload(extracted) {
     sourceUrl: extracted.sourceUrl,
     extractionMethod: extracted.extractionMethod,
     diagnostics: extracted.diagnostics,
-  };
-}
-
-function buildResponseFromSavedAnalysis(savedRow) {
-  const analysis = {
-    presence: {
-      category: savedRow.presence_category,
-      factor: Number(savedRow.presence_factor),
-      justification: savedRow.presence_justification,
-    },
-    highlight: {
-      category: savedRow.highlight_category,
-      factor: Number(savedRow.highlight_factor),
-      justification: savedRow.highlight_justification,
-    },
-    protagonism: {
-      category: savedRow.protagonism_category,
-      factor: Number(savedRow.protagonism_factor),
-      justification: savedRow.protagonism_justification,
-    },
-    tone: {
-      category: savedRow.tone_category,
-      factor: Number(savedRow.tone_factor),
-      justification: savedRow.tone_justification,
-    },
-    confidence: Number(savedRow.confidence),
-    evidence: savedRow.evidence || [],
-    status: savedRow.status,
-  };
-
-  return {
-    status: "ok",
-    source: "supabase_cache",
-    extraction: {
-      title: savedRow.extracted_title,
-      textLength: savedRow.text_length,
-      preview: String(savedRow.extracted_text || "").slice(0, 1000),
-      fullText: savedRow.extracted_text,
-      sourceUrl: savedRow.extraction_source_url,
-      extractionMethod: savedRow.extraction_method,
-      diagnostics: savedRow.diagnostics,
-    },
-    analysis,
-    aiFinalFactor: Number(savedRow.ai_final_factor),
-    debug: {
-      rawContent: savedRow.raw_content,
-      usage: {
-        prompt_tokens: savedRow.prompt_tokens,
-        completion_tokens: savedRow.completion_tokens,
-        total_tokens: savedRow.total_tokens,
-      },
-      model: savedRow.model,
-      aiFinalFactor: Number(savedRow.ai_final_factor),
-      cachedFromSupabase: true,
-      savedAt: savedRow.created_at,
-      publicationId: savedRow.publication_id,
-      titleSnapshot: savedRow.title_snapshot,
-      vehicleSnapshot: savedRow.vehicle_snapshot,
-    },
   };
 }
 
@@ -890,7 +892,13 @@ export default async function handler(req, res) {
       const savedAnalysis = await findSavedAnalysis({ url, publicationId });
 
       if (savedAnalysis) {
-        return res.status(200).json(buildResponseFromSavedAnalysis(savedAnalysis));
+        const cachedResponse = buildCachedResponseFromRawContent(savedAnalysis);
+
+        if (cachedResponse) {
+          return res.status(200).json(cachedResponse);
+        }
+
+        // Cache antigo encontrado. Reanalisa para gerar os 8 novos indicadores.
       }
     }
 
@@ -899,33 +907,25 @@ export default async function handler(req, res) {
       .select("id, nome, name, nomes_marca, mensagens_chave, valores_marca")
       .eq("id", clientId)
       .maybeSingle();
-    
+
     if (clientError) {
       console.error("Erro ao buscar cliente:", clientError);
     }
-    
+
     const brandNames =
       clientData?.nomes_marca ||
       clientData?.nome ||
       clientData?.name ||
       clientName ||
       "Marca não informada";
-    
+
     const keyMessages =
       clientData?.mensagens_chave ||
       "Mensagens-chave não informadas. Avalie aderência apenas com base no posicionamento percebido na matéria.";
-    
+
     const brandValues =
       clientData?.valores_marca ||
       "Valores da marca não informados. Avalie com base em atributos reputacionais gerais como confiança, inovação, qualidade, credibilidade, responsabilidade e liderança.";
-    
-    const finalClientName =
-      clientData?.nome ||
-      clientData?.name ||
-      clientName ||
-      clientId ||
-      "Cliente não informado";
-        
 
     const extracted = await extractTextFromUrl(url);
 
@@ -946,25 +946,32 @@ export default async function handler(req, res) {
       });
     }
 
-    const userPrompt = `
-Cliente analisado: ${clientName}
-Veículo: ${vehicle}
-Título informado na planilha: ${title}
-Título extraído da página: ${extracted.title}
+    const extractedText = extracted.body.slice(0, 18000);
 
-Texto da reportagem:
-${extracted.body.slice(0, 18000)}
+    const userPrompt = `
+Analise a publicação usando os dados do cliente, o título, o veículo e o texto da matéria presentes no prompt do sistema.
+Retorne apenas o JSON obrigatório.
 `;
 
     const completion = await deepseek.chat.completions.create({
       model: "deepseek-chat",
       messages: [
-        { role: "system", content: buildSystemPrompt() },
+        {
+          role: "system",
+          content: buildSystemPrompt({
+            brandNames,
+            keyMessages,
+            brandValues,
+            title: title || extracted.title,
+            vehicle,
+            extractedText,
+          }),
+        },
         { role: "user", content: userPrompt },
       ],
       response_format: { type: "json_object" },
       stream: false,
-      max_tokens: 1200,
+      max_tokens: 1800,
       temperature: 0.1,
     });
 
@@ -986,10 +993,10 @@ ${extracted.body.slice(0, 18000)}
       });
     }
 
-    let analysis;
+    let parsed;
 
     try {
-      analysis = parseModelJson(content);
+      parsed = parseModelJson(content);
     } catch (jsonError) {
       return res.status(502).json({
         error: "A DeepSeek retornou uma mensagem, mas ela não é JSON válido.",
@@ -1007,6 +1014,25 @@ ${extracted.body.slice(0, 18000)}
       });
     }
 
+    const analysis = getNewAnalysisFromParsed(parsed);
+
+    if (!analysis) {
+      return res.status(502).json({
+        error: "A DeepSeek retornou JSON válido, mas sem reputationAnalysis.",
+        rawContent: content,
+        parsed,
+        extraction: buildExtractionPayload(extracted),
+      });
+    }
+
+    const brandInputsUsed = buildBrandInputsUsed(parsed, {
+      brandNames,
+      keyMessages,
+      brandValues,
+    });
+
+    const evidence = parsed.evidence || [];
+    const summary = parsed.summary || null;
     const aiFinalFactor = calculateAiFinalFactor(analysis);
 
     let savedRow = null;
@@ -1032,6 +1058,10 @@ ${extracted.body.slice(0, 18000)}
         error: saveError.message,
         extraction: buildExtractionPayload(extracted),
         analysis,
+        reputationAnalysis: analysis,
+        summary,
+        brandInputsUsed,
+        evidence,
         aiFinalFactor,
         debug: {
           rawContent: content,
@@ -1049,6 +1079,10 @@ ${extracted.body.slice(0, 18000)}
       savedAnalysisId: savedRow?.id,
       extraction: buildExtractionPayload(extracted),
       analysis,
+      reputationAnalysis: analysis,
+      summary,
+      brandInputsUsed,
+      evidence,
       aiFinalFactor,
       debug: {
         rawContent: content,

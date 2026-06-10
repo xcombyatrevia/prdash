@@ -1842,6 +1842,8 @@ function ReputationPage() {
         </div>
       </Card>
 
+      <TerritoryDataBlock />
+
       {reputationIndexData.map((index) => (
         <ReputationIndexBlock
           key={index.id}

@@ -830,6 +830,7 @@ function formatMillionsLabel(value) {
 const navItems = [
   [Home, "Visão Geral"],
   [Coins, "Valorações"],
+  [Sparkles, "Reputação"],
   [TrendingUp, "Evolução"],
   [PieIcon, "Análises"],
   [Megaphone, "Canais"],
@@ -1325,6 +1326,466 @@ function ValuationPublicationsCard({ rows, onAnalyzePublication }) {
         </table>
       </div>
     </Card>
+  );
+}
+
+const reputationIndexData = [
+  {
+    id: "ierBuzz",
+    title: "IER-Buzz",
+    description: "Mede a força de ocupação reputacional da marca dentro do território e do recorte analisado.",
+    value: "00",
+    accent: "cyan",
+    formula:
+      "Ocupação de veículos × 25% + Alcance capturado × 25% + Retorno capturado × 20% + Qualidade dos veículos × 15% + Capilaridade × 10% + Frequência ajustada × 5%",
+    components: [
+      {
+        name: "Ocupação de veículos",
+        value: "00",
+        description: "Percentual de veículos do território ocupados pela marca no recorte.",
+        origin: [
+          ["Veículos ocupados", "00"],
+          ["Total de veículos do território", "00"],
+        ],
+      },
+      {
+        name: "Alcance capturado",
+        value: "00",
+        description: "Percentual do alcance potencial do território capturado no recorte.",
+        origin: [
+          ["Alcance dos veículos ocupados", "00"],
+          ["Alcance potencial do território", "00"],
+        ],
+      },
+      {
+        name: "Retorno capturado",
+        value: "00",
+        description: "Percentual do retorno potencial do território convertido em valoração no recorte.",
+        origin: [
+          ["Retorno gerado no recorte", "R$ 00"],
+          ["Retorno potencial do território", "R$ 00"],
+        ],
+      },
+      {
+        name: "Qualidade dos veículos ocupados",
+        value: "00",
+        description: "Score médio dos veículos ocupados, considerando tier ou peso estratégico.",
+        origin: [
+          ["Score médio dos veículos ocupados", "00"],
+          ["Escala máxima", "100"],
+        ],
+      },
+      {
+        name: "Capilaridade capturada",
+        value: "00",
+        description: "Percentual de regiões, UFs ou praças do território com presença da marca.",
+        origin: [
+          ["Praças ocupadas", "00"],
+          ["Praças do território", "00"],
+        ],
+      },
+      {
+        name: "Frequência ajustada",
+        value: "00",
+        description: "Intensidade média de publicações por veículo ocupado, ajustada por frequência ideal.",
+        origin: [
+          ["Publicações totais", "00"],
+          ["Veículos ocupados", "00"],
+          ["Frequência ideal", "00"],
+        ],
+      },
+    ],
+    methodology: [
+      {
+        index: "Ocupação de veículos",
+        measures: "Quanto do território de veículos foi ocupado pela marca.",
+        recorte: "Nº de veículos distintos com ao menos 1 publicação no recorte.",
+        normalization: "Total de veículos ativos no território.",
+        calculation: "veículos ocupados / total de veículos do território × 100",
+      },
+      {
+        index: "Alcance capturado",
+        measures: "Quanto do alcance potencial do território foi alcançado pela presença da marca.",
+        recorte: "Soma do alcance dos veículos distintos ocupados no recorte.",
+        normalization: "Soma do alcance potencial de todos os veículos do território.",
+        calculation: "alcance dos veículos ocupados / alcance potencial do território × 100",
+      },
+      {
+        index: "Retorno capturado",
+        measures: "Quanto valor de mídia foi gerado em relação ao potencial do território.",
+        recorte: "Soma da valoração/retorno das publicações do recorte.",
+        normalization: "Retorno potencial estimado do território.",
+        calculation: "retorno gerado no recorte / retorno potencial do território × 100",
+      },
+      {
+        index: "Qualidade dos veículos ocupados",
+        measures: "Qual é a força estratégica dos veículos onde a marca apareceu.",
+        recorte: "Score médio dos veículos ocupados, por tier ou peso estratégico.",
+        normalization: "Escala fixa de qualidade dos veículos, de 0 a 100.",
+        calculation: "média dos scores dos veículos ocupados",
+      },
+      {
+        index: "Capilaridade capturada",
+        measures: "Quanto da distribuição geográfica do território foi ocupada.",
+        recorte: "Nº de UFs, regiões ou praças distintas com presença no recorte.",
+        normalization: "Total de UFs, regiões ou praças presentes no território.",
+        calculation: "praças ocupadas / praças do território × 100",
+      },
+      {
+        index: "Frequência ajustada",
+        measures: "Intensidade de presença sem premiar repetição excessiva.",
+        recorte: "Nº total de publicações dividido pelos veículos ocupados.",
+        normalization: "Frequência ideal por veículo ocupado.",
+        calculation: "(publicações totais / veículos ocupados) / frequência ideal × 100",
+      },
+    ],
+  },
+  {
+    id: "ierQuali",
+    title: "IER-Quali",
+    description: "Mede a qualidade reputacional da presença, a partir da leitura semântica da IA.",
+    value: "00",
+    accent: "emerald",
+    formula:
+      "Tom × 20% + Protagonismo × 15% + Mensagem-chave × 20% + Valores da marca × 15% + Contexto × 15% + Baixo risco × 15%",
+    components: [
+      {
+        name: "Tom da publicação",
+        value: "00",
+        description: "Leitura semântica geral da matéria em relação à marca.",
+        origin: [["Score retornado pela IA", "00"]],
+      },
+      {
+        name: "Protagonismo da marca",
+        value: "00",
+        description: "Grau de centralidade da marca na matéria.",
+        origin: [["Score retornado pela IA", "00"]],
+      },
+      {
+        name: "Aderência à mensagem-chave",
+        value: "00",
+        description: "Quanto a matéria contempla as mensagens estratégicas da marca.",
+        origin: [["Score retornado pela IA", "00"]],
+      },
+      {
+        name: "Aderência aos valores da marca",
+        value: "00",
+        description: "Quanto a matéria associa a marca aos valores desejados.",
+        origin: [["Score retornado pela IA", "00"]],
+      },
+      {
+        name: "Contexto reputacional",
+        value: "00",
+        description: "Qualidade do contexto em que a marca aparece.",
+        origin: [["Score retornado pela IA", "00"]],
+      },
+      {
+        name: "Risco reputacional",
+        value: "00",
+        description: "Ausência ou presença de crise, crítica, denúncia ou associação negativa.",
+        origin: [["Score retornado pela IA", "00"]],
+      },
+    ],
+    methodology: [
+      {
+        index: "Tom da publicação",
+        measures: "Polaridade reputacional da matéria em relação à marca.",
+        recorte: "Score de tom retornado pela IA.",
+        normalization: "Escala fixa de 0 a 100.",
+        calculation: "score da IA",
+      },
+      {
+        index: "Protagonismo da marca",
+        measures: "Centralidade da marca no conteúdo.",
+        recorte: "Score de protagonismo retornado pela IA.",
+        normalization: "Escala fixa de 0 a 100.",
+        calculation: "score da IA",
+      },
+      {
+        index: "Aderência à mensagem-chave",
+        measures: "Aderência semântica às mensagens estratégicas cadastradas no cliente.",
+        recorte: "Score de aderência retornado pela IA.",
+        normalization: "Escala fixa de 0 a 100.",
+        calculation: "score da IA",
+      },
+      {
+        index: "Aderência aos valores da marca",
+        measures: "Associação da publicação aos valores desejados da marca.",
+        recorte: "Score de aderência retornado pela IA.",
+        normalization: "Escala fixa de 0 a 100.",
+        calculation: "score da IA",
+      },
+      {
+        index: "Contexto reputacional",
+        measures: "Qualidade do contexto em que a marca aparece.",
+        recorte: "Score de contexto retornado pela IA.",
+        normalization: "Escala fixa de 0 a 100.",
+        calculation: "score da IA",
+      },
+      {
+        index: "Risco reputacional",
+        measures: "Nível de segurança reputacional da publicação.",
+        recorte: "Score de risco retornado pela IA, já invertido.",
+        normalization: "Escala fixa de 0 a 100.",
+        calculation: "score da IA",
+      },
+    ],
+  },
+  {
+    id: "icr",
+    title: "ICR",
+    description: "Índice composto de reputação, combinando força de presença e qualidade reputacional.",
+    value: "00",
+    accent: "amber",
+    formula: "IER-Buzz × 50% + IER-Quali × 50%",
+    components: [
+      {
+        name: "IER-Buzz",
+        value: "00",
+        description: "Força de ocupação reputacional no território e recorte analisado.",
+        origin: [["Valor do IER-Buzz", "00"]],
+      },
+      {
+        name: "IER-Quali",
+        value: "00",
+        description: "Qualidade reputacional da presença no recorte analisado.",
+        origin: [["Valor do IER-Quali", "00"]],
+      },
+    ],
+    methodology: [
+      {
+        index: "IER-Buzz",
+        measures: "Força de presença, alcance e ocupação territorial.",
+        recorte: "Resultado consolidado do IER-Buzz no recorte.",
+        normalization: "Escala final de 0 a 100.",
+        calculation: "IER-Buzz × 50%",
+      },
+      {
+        index: "IER-Quali",
+        measures: "Qualidade reputacional da presença.",
+        recorte: "Resultado consolidado do IER-Quali no recorte.",
+        normalization: "Escala final de 0 a 100.",
+        calculation: "IER-Quali × 50%",
+      },
+    ],
+  },
+];
+
+function MethodologyModal({ index, onClose }) {
+  if (!index) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
+      <div className="max-h-[86vh] w-full max-w-6xl overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.25em] text-cyan-300">
+              Metodologia
+            </p>
+            <h3 className="mt-1 font-serif text-2xl text-white">
+              {index.title}
+            </h3>
+            <p className="mt-1 text-sm text-slate-400">
+              Como cada componente será normalizado para compor o índice.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-200 transition hover:bg-white/10"
+          >
+            Fechar
+          </button>
+        </div>
+
+        <div className="max-h-[68vh] overflow-auto p-5">
+          <table className="w-full min-w-[980px] border-separate border-spacing-y-2 text-left text-sm">
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-slate-500">
+                <th className="px-3 py-2 font-medium">Índice</th>
+                <th className="px-3 py-2 font-medium">O que mede</th>
+                <th className="px-3 py-2 font-medium">Componente de recorte</th>
+                <th className="px-3 py-2 font-medium">Componente de normalização</th>
+                <th className="px-3 py-2 font-medium">Cálculo</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {index.methodology.map((row) => (
+                <tr key={row.index} className="bg-slate-900/70">
+                  <td className="rounded-l-xl border-y border-l border-white/10 px-3 py-3 font-medium text-white">
+                    {row.index}
+                  </td>
+                  <td className="border-y border-white/10 px-3 py-3 text-slate-300">
+                    {row.measures}
+                  </td>
+                  <td className="border-y border-white/10 px-3 py-3 text-slate-300">
+                    {row.recorte}
+                  </td>
+                  <td className="border-y border-white/10 px-3 py-3 text-slate-300">
+                    {row.normalization}
+                  </td>
+                  <td className="rounded-r-xl border-y border-r border-white/10 px-3 py-3 text-cyan-100">
+                    {row.calculation}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <p className="mt-4 text-xs leading-relaxed text-slate-500">
+            Nesta página de teste, os valores aparecem como 00. Os cálculos serão conectados depois aos dados de território,
+            recorte, publicações, veículos e análises de IA.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReputationIndexBlock({ index, onOpenMethodology }) {
+  const accentMap = {
+    cyan: {
+      border: "border-cyan-300/20",
+      bg: "bg-cyan-300/10",
+      text: "text-cyan-100",
+      soft: "text-cyan-200",
+    },
+    emerald: {
+      border: "border-emerald-300/20",
+      bg: "bg-emerald-300/10",
+      text: "text-emerald-100",
+      soft: "text-emerald-200",
+    },
+    amber: {
+      border: "border-amber-300/20",
+      bg: "bg-amber-300/10",
+      text: "text-amber-100",
+      soft: "text-amber-200",
+    },
+  };
+
+  const accent = accentMap[index.accent] || accentMap.cyan;
+
+  return (
+    <Card className="overflow-hidden">
+      <div className={`border-b ${accent.border} ${accent.bg} px-5 py-5`}>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <p className={`text-xs uppercase tracking-[0.25em] ${accent.text}`}>
+              Índice de reputação
+            </p>
+
+            <div className="mt-2 flex flex-wrap items-end gap-4">
+              <h2 className="font-serif text-4xl text-white md:text-5xl">
+                {index.title}
+              </h2>
+
+              <p className="font-serif text-6xl leading-none text-white md:text-7xl">
+                {index.value}
+              </p>
+            </div>
+
+            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-300">
+              {index.description}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onOpenMethodology(index)}
+            className={`rounded-xl border ${accent.border} ${accent.bg} px-4 py-3 text-sm font-medium ${accent.text} transition hover:bg-white/10`}
+          >
+            Ver metodologia
+          </button>
+        </div>
+
+        <div className="mt-5 rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            Fórmula usada
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-slate-200">
+            {index.formula}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 p-5 lg:grid-cols-2 xl:grid-cols-3">
+        {index.components.map((component) => (
+          <div key={component.name} className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  Componente
+                </p>
+                <h3 className="mt-1 text-base font-semibold text-white">
+                  {component.name}
+                </h3>
+              </div>
+
+              <p className={`font-serif text-4xl ${accent.soft}`}>
+                {component.value}
+              </p>
+            </div>
+
+            <p className="mt-3 min-h-[44px] text-xs leading-relaxed text-slate-400">
+              {component.description}
+            </p>
+
+            <div className="mt-4 space-y-2 border-t border-white/10 pt-3">
+              {component.origin.map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between gap-3 text-xs">
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-slate-300">
+                    {label}
+                  </span>
+                  <span className="font-medium text-white">
+                    {value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function ReputationPage() {
+  const [openMethodology, setOpenMethodology] = useState(null);
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <SectionTitle>Reputação</SectionTitle>
+            <p className="mt-1 max-w-4xl text-sm leading-relaxed text-slate-400">
+              Página de teste para visualização dos índices reputacionais. Os dados ainda estão zerados;
+              a estrutura já está preparada para receber território, recortes, componentes do Supabase e scores da IA.
+            </p>
+          </div>
+
+          <span className="rounded-full border border-violet-300/20 bg-violet-300/10 px-3 py-1 text-xs text-violet-100">
+            Estrutura em teste
+          </span>
+        </div>
+      </Card>
+
+      {reputationIndexData.map((index) => (
+        <ReputationIndexBlock
+          key={index.id}
+          index={index}
+          onOpenMethodology={setOpenMethodology}
+        />
+      ))}
+
+      <MethodologyModal
+        index={openMethodology}
+        onClose={() => setOpenMethodology(null)}
+      />
+    </div>
   );
 }
 
@@ -2282,6 +2743,8 @@ export default function PRDashboard() {
 
           {activePage === "Gestão de Dados" ? (
             <DataManagementPage />
+          ) : activePage === "Reputação" ? (
+            <ReputationPage />
           ) : activePage === "Valorações" ? (
             <>
               <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">

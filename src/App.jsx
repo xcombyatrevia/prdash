@@ -1752,6 +1752,75 @@ function ReputationIndexBlock({ index, onOpenMethodology }) {
   );
 }
 
+function TerritoryDataBlock() {
+  const territoryData = [
+    {
+      label: "Número de veículos",
+      value: "00",
+      helper: "Total de veículos ativos no território",
+    },
+    {
+      label: "Alcance potencial",
+      value: "00",
+      helper: "Soma do alcance potencial dos veículos",
+    },
+    {
+      label: "Retorno potencial",
+      value: "R$ 00",
+      helper: "Potencial estimado de retorno do território",
+    },
+    {
+      label: "Tier médio",
+      value: "00",
+      helper: "Score médio dos veículos do território",
+    },
+    {
+      label: "Capilaridade geográfica",
+      value: "00",
+      helper: "Número de praças presentes no território",
+    },
+  ];
+
+  return (
+    <Card className="p-5">
+      <div className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <SectionTitle>Dados do território</SectionTitle>
+          <p className="mt-1 max-w-4xl text-sm leading-relaxed text-slate-400">
+            Resumo da régua de referência usada para normalizar os índices reputacionais.
+            Nesta versão de teste, os valores ainda aparecem zerados.
+          </p>
+        </div>
+
+        <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">
+          Território mapeado
+        </span>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+        {territoryData.map((item) => (
+          <div
+            key={item.label}
+            className="rounded-xl border border-white/10 bg-slate-950/45 p-4"
+          >
+            <p className="text-xs uppercase leading-snug tracking-wide text-slate-500">
+              {item.label}
+            </p>
+
+            <p className="mt-2 font-serif text-4xl leading-tight text-white">
+              {item.value}
+            </p>
+
+            <p className="mt-2 text-xs leading-relaxed text-slate-400">
+              {item.helper}
+            </p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function ReputationPage() {
   const [openMethodology, setOpenMethodology] = useState(null);
 

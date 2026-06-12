@@ -1013,6 +1013,9 @@ export default async function handler(req, res) {
     const endDate = String(input.endDate || "").trim();
     const limit = Math.min(Math.max(Number(input.limit || 10), 1), 10);
     const forceReanalyze = String(input.forceReanalyze || "false") === "true";
+    const runAi = String(input.runAi || "false") === "true";
+
+    
 
     if (!clientId) {
       return res.status(400).json({
@@ -1058,15 +1061,21 @@ export default async function handler(req, res) {
       publications,
     });
 
-    const analysisCollection = await collectCompleteAnalyses({
-      req,
-      publications,
-      client,
-      clientId,
-      limit,
-      forceReanalyze,
-    });
-
+    const analysisCollection = runAi
+      ? await collectCompleteAnalyses({
+          req,
+          publications,
+          client,
+          clientId,
+          limit,
+          forceReanalyze,
+        })
+      : {
+          completeAnalyses: [],
+          attempts: [],
+          candidatesCount: 0,
+        };
+    
     const quali = calculateQuali(analysisCollection.completeAnalyses);
     
     const icrValue =
@@ -1111,8 +1120,9 @@ export default async function handler(req, res) {
       territory: territoryData,
       recorte: {
         totalPublications: publications.length,
-        aiAnalysisLimit: limit,
-        completeAiAnalyses: analysisCollection.completeAnalyses.length,
+        runAi,
+        aiAnalysisLimit: runAi ? limit : 0,
+        validAiAnalyses: analysisCollection.completeAnalyses.length,
         attemptedAiAnalyses: analysisCollection.attempts.length,
       },
       indexes: {

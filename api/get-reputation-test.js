@@ -267,6 +267,116 @@ function hasCompleteReputationAnalysis(analysis) {
   });
 }
 
+function hasBrandMentionInAnalysis(analysis) {
+  const text = [
+    analysis?.publicationTone?.justification,
+    analysis?.brandProtagonism?.justification,
+    analysis?.keyMessageAdherence?.justification,
+    analysis?.brandValuesAdherence?.justification,
+    analysis?.reputationalContext?.justification,
+    analysis?.reputationalRisk?.justification,
+    analysis?.spokespersonPresence?.justification,
+    analysis?.titleOrSubtitleMention?.justification,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const invalidSignals = [
+    "marca não é mencionada",
+    "marca nao e mencionada",
+    "não menciona a marca",
+    "nao menciona a marca",
+    "não há menção",
+    "nao ha mencao",
+    "sem menção relevante",
+    "sem mencao relevante",
+    "não aparece",
+    "nao aparece",
+    "não é mencionada",
+    "nao e mencionada",
+  ];
+
+  return !invalidSignals.some((signal) => text.includes(signal));
+}
+
+function hasUsableEvidence(data) {
+  return Array.isArray(data?.evidence) && data.evidence.length > 0;
+}
+
+function isTextExtractionLimited(data) {
+  const text = [
+    data?.summary?.overallReading,
+    data?.summary?.mainRisk,
+    data?.summary?.mainStrength,
+    ...(Array.isArray(data?.evidence) ? data.evidence : []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const limitedSignals = [
+    "texto não pôde ser extraído",
+    "texto nao pode ser extraido",
+    "conteúdo não pôde ser extraído",
+    "conteudo nao pode ser extraido",
+    "pdf binário",
+    "pdf binario",
+    "dados binários",
+    "dados binarios",
+    "conteúdo ilegível",
+    "conteudo ilegivel",
+    "não foi possível extrair",
+    "nao foi possivel extrair",
+    "não pôde ser lido",
+    "nao pode ser lido",
+  ];
+
+  return limitedSignals.some((signal) => text.includes(signal));
+}
+
+function classifyAiAnalysisQuality(data) {
+  const analysis = getReputationAnalysisFromResponse(data);
+
+  if (!hasCompleteReputationAnalysis(analysis)) {
+    return {
+      status: "incompleta",
+      validForQuali: false,
+      reason: "A análise não retornou os 8 indicadores completos.",
+    };
+  }
+
+  if (isTextExtractionLimited(data)) {
+    return {
+      status: "texto_insuficiente",
+      validForQuali: false,
+      reason: "A análise foi baseada em texto insuficiente, ilegível ou não extraído.",
+    };
+  }
+
+  if (!hasBrandMentionInAnalysis(analysis)) {
+    return {
+      status: "sem_mencao_marca",
+      validForQuali: false,
+      reason: "A análise indica que a marca não foi mencionada de forma relevante.",
+    };
+  }
+
+  if (!hasUsableEvidence(data)) {
+    return {
+      status: "sem_evidencia",
+      validForQuali: false,
+      reason: "A análise não trouxe evidências literais para sustentar a leitura.",
+    };
+  }
+
+  return {
+    status: "valida",
+    validForQuali: true,
+    reason: "Análise completa e válida para cálculo do IER-Quali.",
+  };
+}
+
 function calculateQualiFromAnalysis(analysis) {
   if (!hasCompleteReputationAnalysis(analysis)) return null;
 
@@ -638,21 +748,24 @@ async function collectCompleteAnalyses({
       });
 
       const analysis = getReputationAnalysisFromResponse(data);
-
-      if (!hasCompleteReputationAnalysis(analysis)) {
+      const quality = classifyAiAnalysisQuality(data);
+      
+      if (!quality.validForQuali) {
         attempts.push({
           ...attemptBase,
-          status: "incompleta",
-          reason: "A análise não retornou os 8 indicadores completos.",
+          status: quality.status,
+          validForQuali: false,
+          reason: quality.reason,
         });
         continue;
       }
-
+      
       const qualiValue = calculateQualiFromAnalysis(analysis);
-
+      
       completeAnalyses.push({
         ...attemptBase,
-        status: "completa",
+        status: "valida",
+        validForQuali: true,
         analysis,
         reputationAnalysis: analysis,
         summary: data.summary || null,
@@ -660,12 +773,15 @@ async function collectCompleteAnalyses({
         source: data.source || null,
         qualiValue,
       });
-
+      
       attempts.push({
         ...attemptBase,
-        status: "completa",
+        status: "valida",
+        validForQuali: true,
         qualiValue,
       });
+
+      
     } catch (error) {
       attempts.push({
         ...attemptBase,
@@ -682,10 +798,80 @@ async function collectCompleteAnalyses({
   };
 }
 
-function calculateQuali(completeAnalyses) {
+function calculateQuali(completeAnalyses = []) {
   const values = completeAnalyses
     .map((item) => item.qualiValue)
-    .filter((value) => value !== null && value !== undefined);
+    .filter((value) => value !== null && value !== undefined && !Number.isNaN(Number(value)));
+
+  if (!values.length) {
+    return {
+      value: null,
+      formula:
+        "Tom × 25% + Protagonismo × 20% + Mensagem-chave × 20% + Valores × 15% + Contexto × 10% + Baixo risco × 10%",
+      weights: QUALI_WEIGHTS,
+      components: {
+        publicationTone: {
+          label: "Tom da publicação",
+          value: null,
+          origin: {
+            analyzedPublications: 0,
+            averageScore: null,
+          },
+          formula: "média dos scores de tom retornados pela IA",
+        },
+        brandProtagonism: {
+          label: "Protagonismo da marca",
+          value: null,
+          origin: {
+            analyzedPublications: 0,
+            averageScore: null,
+          },
+          formula: "média dos scores de protagonismo retornados pela IA",
+        },
+        keyMessageAdherence: {
+          label: "Aderência à mensagem-chave",
+          value: null,
+          origin: {
+            analyzedPublications: 0,
+            averageScore: null,
+          },
+          formula: "média dos scores de aderência à mensagem-chave retornados pela IA",
+        },
+        brandValuesAdherence: {
+          label: "Aderência aos valores da marca",
+          value: null,
+          origin: {
+            analyzedPublications: 0,
+            averageScore: null,
+          },
+          formula: "média dos scores de aderência aos valores retornados pela IA",
+        },
+        reputationalContext: {
+          label: "Contexto reputacional",
+          value: null,
+          origin: {
+            analyzedPublications: 0,
+            averageScore: null,
+          },
+          formula: "média dos scores de contexto retornados pela IA",
+        },
+        reputationalRisk: {
+          label: "Risco reputacional",
+          value: null,
+          origin: {
+            analyzedPublications: 0,
+            averageScore: null,
+          },
+          formula: "média dos scores de baixo risco retornados pela IA",
+        },
+      },
+      diagnostics: {
+        requestedAnalyses: completeAnalyses.length,
+        averageFromValues: 0,
+        status: "sem_analises_validas",
+      },
+    };
+  }
 
   const componentsAccumulator = {
     publicationTone: [],
@@ -697,82 +883,106 @@ function calculateQuali(completeAnalyses) {
   };
 
   for (const item of completeAnalyses) {
-    const analysis = item.analysis;
+    const analysis = item.analysis || item.reputationAnalysis;
 
     if (!hasCompleteReputationAnalysis(analysis)) continue;
 
-    componentsAccumulator.publicationTone.push(clampScore(analysis.publicationTone?.score));
-    componentsAccumulator.brandProtagonism.push(clampScore(analysis.brandProtagonism?.score));
-    componentsAccumulator.keyMessageAdherence.push(clampScore(analysis.keyMessageAdherence?.score));
-    componentsAccumulator.brandValuesAdherence.push(clampScore(analysis.brandValuesAdherence?.score));
-    componentsAccumulator.reputationalContext.push(clampScore(analysis.reputationalContext?.score));
-    componentsAccumulator.reputationalRisk.push(clampScore(analysis.reputationalRisk?.score));
+    componentsAccumulator.publicationTone.push(
+      clampScore(analysis.publicationTone?.score)
+    );
+
+    componentsAccumulator.brandProtagonism.push(
+      clampScore(analysis.brandProtagonism?.score)
+    );
+
+    componentsAccumulator.keyMessageAdherence.push(
+      clampScore(analysis.keyMessageAdherence?.score)
+    );
+
+    componentsAccumulator.brandValuesAdherence.push(
+      clampScore(analysis.brandValuesAdherence?.score)
+    );
+
+    componentsAccumulator.reputationalContext.push(
+      clampScore(analysis.reputationalContext?.score)
+    );
+
+    componentsAccumulator.reputationalRisk.push(
+      clampScore(analysis.reputationalRisk?.score)
+    );
   }
+
+  const publicationToneAverage = calculateAverage(componentsAccumulator.publicationTone);
+  const brandProtagonismAverage = calculateAverage(componentsAccumulator.brandProtagonism);
+  const keyMessageAdherenceAverage = calculateAverage(componentsAccumulator.keyMessageAdherence);
+  const brandValuesAdherenceAverage = calculateAverage(componentsAccumulator.brandValuesAdherence);
+  const reputationalContextAverage = calculateAverage(componentsAccumulator.reputationalContext);
+  const reputationalRiskAverage = calculateAverage(componentsAccumulator.reputationalRisk);
 
   const components = {
     publicationTone: {
       label: "Tom da publicação",
-      value: calculateAverage(componentsAccumulator.publicationTone),
+      value: Number(publicationToneAverage.toFixed(2)),
       origin: {
-        analyzedPublications: completeAnalyses.length,
-        averageScore: calculateAverage(componentsAccumulator.publicationTone),
+        analyzedPublications: componentsAccumulator.publicationTone.length,
+        averageScore: Number(publicationToneAverage.toFixed(2)),
       },
       formula: "média dos scores de tom retornados pela IA",
     },
     brandProtagonism: {
       label: "Protagonismo da marca",
-      value: calculateAverage(componentsAccumulator.brandProtagonism),
+      value: Number(brandProtagonismAverage.toFixed(2)),
       origin: {
-        analyzedPublications: completeAnalyses.length,
-        averageScore: calculateAverage(componentsAccumulator.brandProtagonism),
+        analyzedPublications: componentsAccumulator.brandProtagonism.length,
+        averageScore: Number(brandProtagonismAverage.toFixed(2)),
       },
       formula: "média dos scores de protagonismo retornados pela IA",
     },
     keyMessageAdherence: {
       label: "Aderência à mensagem-chave",
-      value: calculateAverage(componentsAccumulator.keyMessageAdherence),
+      value: Number(keyMessageAdherenceAverage.toFixed(2)),
       origin: {
-        analyzedPublications: completeAnalyses.length,
-        averageScore: calculateAverage(componentsAccumulator.keyMessageAdherence),
+        analyzedPublications: componentsAccumulator.keyMessageAdherence.length,
+        averageScore: Number(keyMessageAdherenceAverage.toFixed(2)),
       },
       formula: "média dos scores de aderência à mensagem-chave retornados pela IA",
     },
     brandValuesAdherence: {
       label: "Aderência aos valores da marca",
-      value: calculateAverage(componentsAccumulator.brandValuesAdherence),
+      value: Number(brandValuesAdherenceAverage.toFixed(2)),
       origin: {
-        analyzedPublications: completeAnalyses.length,
-        averageScore: calculateAverage(componentsAccumulator.brandValuesAdherence),
+        analyzedPublications: componentsAccumulator.brandValuesAdherence.length,
+        averageScore: Number(brandValuesAdherenceAverage.toFixed(2)),
       },
       formula: "média dos scores de aderência aos valores retornados pela IA",
     },
     reputationalContext: {
       label: "Contexto reputacional",
-      value: calculateAverage(componentsAccumulator.reputationalContext),
+      value: Number(reputationalContextAverage.toFixed(2)),
       origin: {
-        analyzedPublications: completeAnalyses.length,
-        averageScore: calculateAverage(componentsAccumulator.reputationalContext),
+        analyzedPublications: componentsAccumulator.reputationalContext.length,
+        averageScore: Number(reputationalContextAverage.toFixed(2)),
       },
       formula: "média dos scores de contexto retornados pela IA",
     },
     reputationalRisk: {
       label: "Risco reputacional",
-      value: calculateAverage(componentsAccumulator.reputationalRisk),
+      value: Number(reputationalRiskAverage.toFixed(2)),
       origin: {
-        analyzedPublications: completeAnalyses.length,
-        averageScore: calculateAverage(componentsAccumulator.reputationalRisk),
+        analyzedPublications: componentsAccumulator.reputationalRisk.length,
+        averageScore: Number(reputationalRiskAverage.toFixed(2)),
       },
       formula: "média dos scores de baixo risco retornados pela IA",
     },
   };
 
   const ierQuali =
-    components.publicationTone.value * QUALI_WEIGHTS.publicationTone +
-    components.brandProtagonism.value * QUALI_WEIGHTS.brandProtagonism +
-    components.keyMessageAdherence.value * QUALI_WEIGHTS.keyMessageAdherence +
-    components.brandValuesAdherence.value * QUALI_WEIGHTS.brandValuesAdherence +
-    components.reputationalContext.value * QUALI_WEIGHTS.reputationalContext +
-    components.reputationalRisk.value * QUALI_WEIGHTS.reputationalRisk;
+    publicationToneAverage * QUALI_WEIGHTS.publicationTone +
+    brandProtagonismAverage * QUALI_WEIGHTS.brandProtagonism +
+    keyMessageAdherenceAverage * QUALI_WEIGHTS.keyMessageAdherence +
+    brandValuesAdherenceAverage * QUALI_WEIGHTS.brandValuesAdherence +
+    reputationalContextAverage * QUALI_WEIGHTS.reputationalContext +
+    reputationalRiskAverage * QUALI_WEIGHTS.reputationalRisk;
 
   return {
     value: Number(ierQuali.toFixed(2)),
@@ -783,10 +993,10 @@ function calculateQuali(completeAnalyses) {
     diagnostics: {
       requestedAnalyses: completeAnalyses.length,
       averageFromValues: values.length,
+      status: "calculado_com_analises_validas",
     },
   };
 }
-
 export default async function handler(req, res) {
   try {
     if (req.method !== "GET" && req.method !== "POST") {
@@ -858,13 +1068,14 @@ export default async function handler(req, res) {
     });
 
     const quali = calculateQuali(analysisCollection.completeAnalyses);
-
+    
     const icrValue =
-      buzz.value * ICR_WEIGHTS.buzz +
-      quali.value * ICR_WEIGHTS.quali;
+      quali.value === null || quali.value === undefined
+        ? null
+        : buzz.value * ICR_WEIGHTS.buzz + quali.value * ICR_WEIGHTS.quali;
 
     const icr = {
-      value: Number(icrValue.toFixed(2)),
+      value: icrValue === null ? null : Number(icrValue.toFixed(2)),
       formula: "IER-Buzz × 50% + IER-Quali × 50%",
       weights: ICR_WEIGHTS,
       components: {

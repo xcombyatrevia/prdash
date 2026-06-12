@@ -904,25 +904,25 @@ export default async function handler(req, res) {
 
     const { data: clientData, error: clientError } = await supabase
       .from("clientes")
-      .select("id, nome, name, nomes_marca, mensagens_chave, valores_marca")
+      .select("id, nome, slug, nomes_marca, mensagens_chave, valores_marca")
       .eq("id", clientId)
-      .maybeSingle();
-
+      .maybeSingle();    
+    
     if (clientError) {
       console.error("Erro ao buscar cliente:", clientError);
     }
 
+
     const brandNames =
       clientData?.nomes_marca ||
       clientData?.nome ||
-      clientData?.name ||
       clientName ||
       "Marca não informada";
-
+    
     const keyMessages =
       clientData?.mensagens_chave ||
       "Mensagens-chave não informadas. Avalie aderência apenas com base no posicionamento percebido na matéria.";
-
+    
     const brandValues =
       clientData?.valores_marca ||
       "Valores da marca não informados. Avalie com base em atributos reputacionais gerais como confiança, inovação, qualidade, credibilidade, responsabilidade e liderança.";

@@ -1752,32 +1752,193 @@ function ReputationIndexBlock({ index, onOpenMethodology }) {
   );
 }
 
-function TerritoryDataBlock() {
+function formatIndexValue(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "—";
+  }
+
+  return Number(value).toLocaleString("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
+function formatIntegerValue(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "00";
+  }
+
+  return Number(value).toLocaleString("pt-BR", {
+    maximumFractionDigits: 0,
+  });
+}
+
+function formatMoneyValue(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "R$ 00";
+  }
+
+  return Number(value).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 0,
+  });
+}
+
+function buildOriginList(componentKey, component) {
+  const origin = component?.origin || {};
+
+  const maps = {
+    vehicleOccupation: [
+      ["Veículos ocupados", formatIntegerValue(origin.occupiedVehicles)],
+      ["Total de veículos do território", formatIntegerValue(origin.totalTerritoryVehicles)],
+    ],
+    capturedReach: [
+      ["Alcance dos veículos ocupados", formatIntegerValue(origin.occupiedReach)],
+      ["Alcance potencial do território", formatIntegerValue(origin.territoryReachPotential)],
+    ],
+    capturedReturn: [
+      ["Retorno gerado no recorte", formatMoneyValue(origin.generatedReturn)],
+      ["Retorno potencial do território", formatMoneyValue(origin.territoryReturnPotential)],
+    ],
+    vehicleQuality: [
+      ["Score médio dos veículos ocupados", formatIndexValue(origin.occupiedVehicleQuality)],
+      ["Escala máxima", "100"],
+    ],
+    capturedCapillarity: [
+      ["Praças ocupadas", formatIntegerValue(origin.occupiedCapillarity)],
+      ["Praças do território", formatIntegerValue(origin.territoryCapillarity)],
+    ],
+    adjustedFrequency: [
+      ["Publicações totais", formatIntegerValue(origin.totalPublications)],
+      ["Veículos ocupados", formatIntegerValue(origin.occupiedVehicles)],
+      ["Publicações por veículo", formatIndexValue(origin.publicationsPerOccupiedVehicle)],
+      ["Frequência ideal", formatIndexValue(origin.idealFrequency)],
+    ],
+    publicationTone: [
+      ["Análises válidas", formatIntegerValue(origin.analyzedPublications)],
+      ["Média do score IA", formatIndexValue(origin.averageScore)],
+    ],
+    brandProtagonism: [
+      ["Análises válidas", formatIntegerValue(origin.analyzedPublications)],
+      ["Média do score IA", formatIndexValue(origin.averageScore)],
+    ],
+    keyMessageAdherence: [
+      ["Análises válidas", formatIntegerValue(origin.analyzedPublications)],
+      ["Média do score IA", formatIndexValue(origin.averageScore)],
+    ],
+    brandValuesAdherence: [
+      ["Análises válidas", formatIntegerValue(origin.analyzedPublications)],
+      ["Média do score IA", formatIndexValue(origin.averageScore)],
+    ],
+    reputationalContext: [
+      ["Análises válidas", formatIntegerValue(origin.analyzedPublications)],
+      ["Média do score IA", formatIndexValue(origin.averageScore)],
+    ],
+    reputationalRisk: [
+      ["Análises válidas", formatIntegerValue(origin.analyzedPublications)],
+      ["Média do score IA", formatIndexValue(origin.averageScore)],
+    ],
+    buzz: [["Valor do IER-Buzz", formatIndexValue(origin.ierBuzz)]],
+    quali: [["Valor do IER-Quali", formatIndexValue(origin.ierQuali)]],
+  };
+
+  return maps[componentKey] || [];
+}
+
+function buildReputationIndexDataFromApi(data) {
+  if (!data?.indexes) return reputationIndexData;
+
+  const buzz = data.indexes.ierBuzz;
+  const quali = data.indexes.ierQuali;
+  const icr = data.indexes.icr;
+
+  return [
+    {
+      ...reputationIndexData[0],
+      value: formatIndexValue(buzz?.value),
+      formula: buzz?.formula || reputationIndexData[0].formula,
+      components: [
+        ["vehicleOccupation", "Ocupação de veículos", "Percentual de veículos do território ocupados pela marca no recorte."],
+        ["capturedReach", "Alcance capturado", "Percentual do alcance potencial do território capturado no recorte."],
+        ["capturedReturn", "Retorno capturado", "Percentual do retorno potencial do território convertido em valoração no recorte."],
+        ["vehicleQuality", "Qualidade dos veículos ocupados", "Score médio dos veículos ocupados, considerando tier ou peso estratégico."],
+        ["capturedCapillarity", "Capilaridade capturada", "Percentual de abrangências ou praças do território com presença da marca."],
+        ["adjustedFrequency", "Frequência ajustada", "Intensidade média de publicações por veículo ocupado, ajustada por frequência ideal."],
+      ].map(([key, name, description]) => ({
+        name,
+        value: formatIndexValue(buzz?.components?.[key]?.value),
+        description,
+        origin: buildOriginList(key, buzz?.components?.[key]),
+      })),
+    },
+    {
+      ...reputationIndexData[1],
+      value: formatIndexValue(quali?.value),
+      formula: quali?.formula || reputationIndexData[1].formula,
+      components: [
+        ["publicationTone", "Tom da publicação", "Leitura semântica geral das matérias válidas em relação à marca."],
+        ["brandProtagonism", "Protagonismo da marca", "Grau médio de centralidade da marca nas publicações válidas."],
+        ["keyMessageAdherence", "Aderência à mensagem-chave", "Aderência média às mensagens estratégicas da marca."],
+        ["brandValuesAdherence", "Aderência aos valores da marca", "Associação média aos valores desejados da marca."],
+        ["reputationalContext", "Contexto reputacional", "Qualidade média do contexto em que a marca aparece."],
+        ["reputationalRisk", "Risco reputacional", "Média do score de baixo risco reputacional."],
+      ].map(([key, name, description]) => ({
+        name,
+        value: formatIndexValue(quali?.components?.[key]?.value),
+        description,
+        origin: buildOriginList(key, quali?.components?.[key]),
+      })),
+    },
+    {
+      ...reputationIndexData[2],
+      value: formatIndexValue(icr?.value),
+      formula: icr?.formula || reputationIndexData[2].formula,
+      components: [
+        {
+          name: "IER-Buzz",
+          value: formatIndexValue(icr?.components?.buzz?.value),
+          description: "Força de ocupação reputacional no território e recorte analisado.",
+          origin: buildOriginList("buzz", icr?.components?.buzz),
+        },
+        {
+          name: "IER-Quali",
+          value: formatIndexValue(icr?.components?.quali?.value),
+          description: "Qualidade reputacional da presença no recorte analisado.",
+          origin: buildOriginList("quali", icr?.components?.quali),
+        },
+      ],
+    },
+  ];
+}
+
+
+function TerritoryDataBlock({ data = null }) {
   const territoryData = [
     {
       label: "Número de veículos",
-      value: "00",
+      value: formatIntegerValue(data?.totalVehicles),
       helper: "Total de veículos ativos no território",
     },
     {
       label: "Alcance potencial",
-      value: "00",
+      value: formatIntegerValue(data?.potentialReach),
       helper: "Soma do alcance potencial dos veículos",
     },
     {
       label: "Retorno potencial",
-      value: "R$ 00",
+      value: formatMoneyValue(data?.potentialReturn),
       helper: "Potencial estimado de retorno do território",
     },
     {
       label: "Tier médio",
-      value: "00",
+      value: formatIndexValue(data?.averageTier),
       helper: "Score médio dos veículos do território",
     },
     {
-      label: "Capilaridade geográfica",
-      value: "00",
-      helper: "Número de praças presentes no território",
+      label: "Capilaridade territorial",
+      value: formatIntegerValue(data?.geographicCapillarity),
+      helper: "Número de abrangências ou praças no território",
     },
   ];
 
@@ -1788,12 +1949,11 @@ function TerritoryDataBlock() {
           <SectionTitle>Dados do território</SectionTitle>
           <p className="mt-1 max-w-4xl text-sm leading-relaxed text-slate-400">
             Resumo da régua de referência usada para normalizar os índices reputacionais.
-            Nesta versão de teste, os valores ainda aparecem zerados.
           </p>
         </div>
 
         <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">
-          Território mapeado
+          {data?.name || "Território mapeado"}
         </span>
       </div>
 
@@ -1821,36 +1981,199 @@ function TerritoryDataBlock() {
   );
 }
 
-function ReputationPage() {
+function ReputationPage({ selectedClient, startDate, endDate }) {
   const [openMethodology, setOpenMethodology] = useState(null);
+  const [reputationData, setReputationData] = useState(null);
+  const [loadingReputation, setLoadingReputation] = useState(false);
+  const [reputationError, setReputationError] = useState("");
+
+  const selectedClientId =
+    selectedClient?.id ||
+    selectedClient?.clientId ||
+    selectedClient?.slug ||
+    "";
+
+  const indexData = buildReputationIndexDataFromApi(reputationData);
+
+  const loadReputation = async ({ runAi = false, forceReanalyze = false, limit = 10 } = {}) => {
+    if (!selectedClientId) {
+      setReputationError("Selecione um cliente antes de calcular reputação.");
+      return;
+    }
+
+    if (!startDate || !endDate) {
+      setReputationError("Informe data inicial e data final antes de calcular reputação.");
+      return;
+    }
+
+    setLoadingReputation(true);
+    setReputationError("");
+
+    try {
+      const params = new URLSearchParams({
+        clientId: selectedClientId,
+        startDate,
+        endDate,
+        limit: String(limit),
+      });
+
+      if (runAi) params.set("runAi", "true");
+      if (forceReanalyze) params.set("forceReanalyze", "true");
+
+      const response = await fetch(`/api/get-reputation-test?${params.toString()}`);
+      const data = await response.json();
+
+      if (!response.ok || data.ok === false) {
+        throw new Error(data.error || "Erro ao carregar dados de reputação.");
+      }
+
+      setReputationData(data);
+    } catch (error) {
+      setReputationError(error.message || "Erro inesperado ao carregar reputação.");
+    } finally {
+      setLoadingReputation(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
       <Card className="p-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <SectionTitle>Reputação</SectionTitle>
             <p className="mt-1 max-w-4xl text-sm leading-relaxed text-slate-400">
-              Página de teste para visualização dos índices reputacionais. Os dados ainda estão zerados;
-              a estrutura já está preparada para receber território, recortes, componentes do Supabase e scores da IA.
+              Visualização dos índices reputacionais calculados sobre o recorte atual:
+              cliente selecionado e período ativo no dashboard.
+            </p>
+
+            <p className="mt-3 text-xs text-slate-500">
+              Cliente:{" "}
+              <span className="text-slate-300">
+                {selectedClient?.nome || selectedClient?.name || selectedClientId || "não selecionado"}
+              </span>{" "}
+              · Período:{" "}
+              <span className="text-slate-300">
+                {startDate || "—"} a {endDate || "—"}
+              </span>
             </p>
           </div>
 
-          <span className="rounded-full border border-violet-300/20 bg-violet-300/10 px-3 py-1 text-xs text-violet-100">
-            Estrutura em teste
-          </span>
+          <div className="flex flex-col gap-2 sm:flex-row xl:justify-end">
+            <button
+              type="button"
+              onClick={() => loadReputation({ runAi: false })}
+              disabled={loadingReputation}
+              className="rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingReputation ? "Carregando..." : "Calcular Buzz"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => loadReputation({ runAi: true, forceReanalyze: false, limit: 10 })}
+              disabled={loadingReputation}
+              className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-300/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingReputation ? "Analisando..." : "Analisar amostra IA"}
+            </button>
+          </div>
         </div>
+
+        {reputationError && (
+          <div className="mt-4 rounded-xl border border-red-300/20 bg-red-300/10 px-4 py-3 text-sm text-red-100">
+            {reputationError}
+          </div>
+        )}
+
+        {reputationData?.recorte && (
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+            <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Publicações no recorte
+              </p>
+              <p className="mt-1 font-serif text-3xl text-white">
+                {formatIntegerValue(reputationData.recorte.totalPublications)}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                IA executada
+              </p>
+              <p className="mt-1 font-serif text-3xl text-white">
+                {reputationData.recorte.runAi ? "Sim" : "Não"}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Análises válidas
+              </p>
+              <p className="mt-1 font-serif text-3xl text-white">
+                {formatIntegerValue(reputationData.recorte.validAiAnalyses)}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Tentativas IA
+              </p>
+              <p className="mt-1 font-serif text-3xl text-white">
+                {formatIntegerValue(reputationData.recorte.attemptedAiAnalyses)}
+              </p>
+            </div>
+          </div>
+        )}
       </Card>
 
-      <TerritoryDataBlock />
+      <TerritoryDataBlock data={reputationData?.territory} />
 
-      {reputationIndexData.map((index) => (
+      {indexData.map((index) => (
         <ReputationIndexBlock
           key={index.id}
           index={index}
           onOpenMethodology={setOpenMethodology}
         />
       ))}
+
+      {reputationData?.aiAttempts?.length > 0 && (
+        <Card className="p-5">
+          <SectionTitle>Tentativas de análise IA</SectionTitle>
+          <div className="mt-4 space-y-2">
+            {reputationData.aiAttempts.map((attempt) => (
+              <div
+                key={`${attempt.publicationId}-${attempt.status}`}
+                className="rounded-xl border border-white/10 bg-slate-950/45 p-3"
+              >
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      {attempt.title}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {attempt.vehicle} · ID {attempt.publicationId}
+                    </p>
+                  </div>
+
+                  <span className={`rounded-full px-3 py-1 text-xs ${
+                    attempt.validForQuali
+                      ? "border border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+                      : "border border-amber-300/20 bg-amber-300/10 text-amber-100"
+                  }`}>
+                    {attempt.status}
+                  </span>
+                </div>
+
+                {attempt.reason && (
+                  <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                    {attempt.reason}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <MethodologyModal
         index={openMethodology}
@@ -1859,7 +2182,6 @@ function ReputationPage() {
     </div>
   );
 }
-
 
 function DataManagementPage() {
   const [selectedClientId, setSelectedClientId] = useState("cliente_x");
@@ -2815,7 +3137,11 @@ export default function PRDashboard() {
           {activePage === "Gestão de Dados" ? (
             <DataManagementPage />
           ) : activePage === "Reputação" ? (
-            <ReputationPage />
+            <ReputationPage
+              selectedClient={selectedClient}
+              startDate={startDate}
+              endDate={endDate}
+            />
           ) : activePage === "Valorações" ? (
             <>
               <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">

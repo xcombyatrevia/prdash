@@ -1849,63 +1849,123 @@ function buildOriginList(componentKey, component) {
 function buildReputationIndexDataFromApi(data) {
   if (!data?.indexes) return reputationIndexData;
 
-  const buzz = data.indexes.ierBuzz;
-  const quali = data.indexes.ierQuali;
-  const icr = data.indexes.icr;
+  const buzz = data.indexes.ierBuzz || {};
+  const quali = data.indexes.ierQuali || {};
+  const icr = data.indexes.icr || {};
+
+  const buzzComponents = buzz.components || {};
+  const qualiComponents = quali.components || {};
+  const icrComponents = icr.components || {};
 
   return [
     {
       ...reputationIndexData[0],
-      value: formatIndexValue(buzz?.value),
-      formula: buzz?.formula || reputationIndexData[0].formula,
+      value: formatIndexValue(buzz.value),
+      formula: buzz.formula || reputationIndexData[0].formula,
       components: [
-        ["vehicleOccupation", "Ocupação de veículos", "Percentual de veículos do território ocupados pela marca no recorte."],
-        ["capturedReach", "Alcance capturado", "Percentual do alcance potencial do território capturado no recorte."],
-        ["capturedReturn", "Retorno capturado", "Percentual do retorno potencial do território convertido em valoração no recorte."],
-        ["vehicleQuality", "Qualidade dos veículos ocupados", "Score médio dos veículos ocupados, considerando tier ou peso estratégico."],
-        ["capturedCapillarity", "Capilaridade capturada", "Percentual de abrangências ou praças do território com presença da marca."],
-        ["adjustedFrequency", "Frequência ajustada", "Intensidade média de publicações por veículo ocupado, ajustada por frequência ideal."],
-      ].map(([key, name, description]) => ({
-        name,
-        value: formatIndexValue(buzz?.components?.[key]?.value),
-        description,
-        origin: buildOriginList(key, buzz?.components?.[key]),
-      })),
+        {
+          key: "vehicleOccupation",
+          name: "Ocupação de veículos",
+          description: "Percentual de veículos do território ocupados pela marca no recorte.",
+        },
+        {
+          key: "capturedReach",
+          name: "Alcance capturado",
+          description: "Percentual do alcance potencial do território capturado no recorte.",
+        },
+        {
+          key: "capturedReturn",
+          name: "Retorno capturado",
+          description: "Percentual do retorno potencial do território convertido em valoração no recorte.",
+        },
+        {
+          key: "vehicleQuality",
+          name: "Qualidade dos veículos ocupados",
+          description: "Score médio dos veículos ocupados, considerando tier ou peso estratégico.",
+        },
+        {
+          key: "capturedCapillarity",
+          name: "Capilaridade capturada",
+          description: "Percentual de abrangências ou praças do território com presença da marca.",
+        },
+        {
+          key: "adjustedFrequency",
+          name: "Frequência ajustada",
+          description: "Intensidade média de publicações por veículo ocupado, ajustada por frequência ideal.",
+        },
+      ].map((item) => {
+        const component = buzzComponents[item.key];
+
+        return {
+          name: item.name,
+          value: formatIndexValue(component?.value),
+          description: item.description,
+          origin: buildOriginList(item.key, component),
+        };
+      }),
     },
     {
       ...reputationIndexData[1],
-      value: formatIndexValue(quali?.value),
-      formula: quali?.formula || reputationIndexData[1].formula,
+      value: formatIndexValue(quali.value),
+      formula: quali.formula || reputationIndexData[1].formula,
       components: [
-        ["publicationTone", "Tom da publicação", "Leitura semântica geral das matérias válidas em relação à marca."],
-        ["brandProtagonism", "Protagonismo da marca", "Grau médio de centralidade da marca nas publicações válidas."],
-        ["keyMessageAdherence", "Aderência à mensagem-chave", "Aderência média às mensagens estratégicas da marca."],
-        ["brandValuesAdherence", "Aderência aos valores da marca", "Associação média aos valores desejados da marca."],
-        ["reputationalContext", "Contexto reputacional", "Qualidade média do contexto em que a marca aparece."],
-        ["reputationalRisk", "Risco reputacional", "Média do score de baixo risco reputacional."],
-      ].map(([key, name, description]) => ({
-        name,
-        value: formatIndexValue(quali?.components?.[key]?.value),
-        description,
-        origin: buildOriginList(key, quali?.components?.[key]),
-      })),
+        {
+          key: "publicationTone",
+          name: "Tom da publicação",
+          description: "Leitura semântica geral das matérias válidas em relação à marca.",
+        },
+        {
+          key: "brandProtagonism",
+          name: "Protagonismo da marca",
+          description: "Grau médio de centralidade da marca nas publicações válidas.",
+        },
+        {
+          key: "keyMessageAdherence",
+          name: "Aderência à mensagem-chave",
+          description: "Aderência média às mensagens estratégicas da marca.",
+        },
+        {
+          key: "brandValuesAdherence",
+          name: "Aderência aos valores da marca",
+          description: "Associação média aos valores desejados da marca.",
+        },
+        {
+          key: "reputationalContext",
+          name: "Contexto reputacional",
+          description: "Qualidade média do contexto em que a marca aparece.",
+        },
+        {
+          key: "reputationalRisk",
+          name: "Risco reputacional",
+          description: "Média do score de baixo risco reputacional.",
+        },
+      ].map((item) => {
+        const component = qualiComponents[item.key];
+
+        return {
+          name: item.name,
+          value: formatIndexValue(component?.value),
+          description: item.description,
+          origin: buildOriginList(item.key, component),
+        };
+      }),
     },
     {
       ...reputationIndexData[2],
-      value: formatIndexValue(icr?.value),
-      formula: icr?.formula || reputationIndexData[2].formula,
+      value: formatIndexValue(icr.value),
+      formula: icr.formula || reputationIndexData[2].formula,
       components: [
         {
           name: "IER-Buzz",
-          value: formatIndexValue(icr?.components?.buzz?.value),
+          value: formatIndexValue(icrComponents.buzz?.value),
           description: "Força de ocupação reputacional no território e recorte analisado.",
-          origin: buildOriginList("buzz", icr?.components?.buzz),
+          origin: buildOriginList("buzz", icrComponents.buzz),
         },
         {
           name: "IER-Quali",
-          value: formatIndexValue(icr?.components?.quali?.value),
+          value: formatIndexValue(icrComponents.quali?.value),
           description: "Qualidade reputacional da presença no recorte analisado.",
-          origin: buildOriginList("quali", icr?.components?.quali),
+          origin: buildOriginList("quali", icrComponents.quali),
         },
       ],
     },
@@ -1993,7 +2053,9 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
     selectedClient?.slug ||
     "";
 
-  const indexData = buildReputationIndexDataFromApi(reputationData);
+  const indexData = reputationData?.indexes
+  ? buildReputationIndexDataFromApi(reputationData)
+  : reputationIndexData;
 
   const loadReputation = async ({ runAi = false, forceReanalyze = false, limit = 10 } = {}) => {
     if (!selectedClientId) {

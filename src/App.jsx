@@ -1687,7 +1687,7 @@ function ReputationIndexBlock({ index, onOpenMethodology }) {
               </p>
             </div>
 
-            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-300">
+            <p className="min-w-0 break-words font-serif text-3xl leading-tight text-cyan-200">
               {index.description}
             </p>
           </div>
@@ -1701,7 +1701,7 @@ function ReputationIndexBlock({ index, onOpenMethodology }) {
           </button>
         </div>
 
-        <div className="mt-5 rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3">
+        <div className="min-w-0 rounded-xl border border-white/10 bg-slate-950/45 p-4">
           <p className="text-xs uppercase tracking-wide text-slate-500">
             Fórmula usada
           </p>
@@ -1735,15 +1735,22 @@ function ReputationIndexBlock({ index, onOpenMethodology }) {
 
             <div className="mt-4 space-y-2 border-t border-white/10 pt-3">
               {component.origin.map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-3 text-xs">
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-slate-300">
+                <div
+                  key={label}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3"
+                >
+                  <span className="min-w-0 break-words rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-slate-300">
                     {label}
                   </span>
-                  <span className="font-medium text-white">
+              
+                  <strong className="min-w-0 max-w-[160px] break-words text-right text-[11px] text-white">
                     {value}
-                  </span>
+                  </strong>
                 </div>
               ))}
+
+
+              
             </div>
           </div>
         ))}
@@ -1972,6 +1979,9 @@ function buildReputationIndexDataFromApi(data) {
   ];
 }
 
+const bigNumberClass =
+  "mt-2 min-w-0 break-words font-serif text-3xl leading-tight text-white md:text-4xl";
+
 
 function TerritoryDataBlock({ data = null }) {
   const territoryData = [
@@ -2021,13 +2031,13 @@ function TerritoryDataBlock({ data = null }) {
         {territoryData.map((item) => (
           <div
             key={item.label}
-            className="rounded-xl border border-white/10 bg-slate-950/45 p-4"
+            className="min-w-0 rounded-xl border border-white/10 bg-slate-950/45 p-4"
           >
             <p className="text-xs uppercase leading-snug tracking-wide text-slate-500">
               {item.label}
             </p>
 
-            <p className="mt-2 font-serif text-4xl leading-tight text-white">
+            <p className={bigNumberClass}>
               {item.value}
             </p>
 

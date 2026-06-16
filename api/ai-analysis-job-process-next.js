@@ -279,7 +279,7 @@ async function getNextPendingItem(jobId) {
     .select("*")
     .eq("job_id", jobId)
     .eq("status", "pending")
-    .order("created_at", { ascending: true })
+    .order("updated_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 

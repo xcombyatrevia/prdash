@@ -513,19 +513,6 @@ async function getTerritoryVehicles(territoryId) {
     }));
 }
 
-  const { data: vehicles, error: vehiclesError } = await supabase
-    .from("veiculos")
-    .select("*")
-    .in("id", vehicleIds)
-    .eq("ativo", true);
-
-  if (vehiclesError) {
-    throw new Error(`Erro ao buscar dados dos veículos: ${vehiclesError.message}`);
-  }
-
-  return vehicles || [];
-}
-
 async function getClientData(clientId) {
   const { data, error } = await supabase
     .from("clientes")

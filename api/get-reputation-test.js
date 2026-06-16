@@ -400,10 +400,11 @@ function calculateAverage(values) {
   return validValues.reduce((sum, value) => sum + value, 0) / validValues.length;
 }
 
-async function getActiveTerritory() {
+async function getActiveTerritory(clientId) {
   const { data, error } = await supabase
     .from("territorios")
     .select("*")
+    .eq("client_id", clientId)
     .eq("status", "ativo")
     .order("versao", { ascending: false })
     .order("created_at", { ascending: false })
@@ -415,12 +416,11 @@ async function getActiveTerritory() {
   }
 
   if (!data) {
-    throw new Error("Nenhum território ativo encontrado.");
+    throw new Error(`Nenhum território ativo encontrado para o cliente ${clientId}.`);
   }
 
   return data;
 }
-
 async function getLatestTerritorySnapshot(territorioId) {
   const { data, error } = await supabase
     .from("territorio_snapshots")
@@ -1031,7 +1031,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const territory = await getActiveTerritory();
+    const territory = await getActiveTerritory(clientId);
     const snapshot = await getLatestTerritorySnapshot(territory.id);
     const vehicles = await getTerritoryVehicles(territory.id);
     const client = await getClientData(clientId);

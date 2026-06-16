@@ -124,6 +124,18 @@ function tierToScore(tier) {
   return 50;
 }
 
+function getVehicleQualityScore(vehicle) {
+  if (
+    vehicle?.peso !== null &&
+    vehicle?.peso !== undefined &&
+    !Number.isNaN(Number(vehicle.peso))
+  ) {
+    return Number(vehicle.peso);
+  }
+
+  return getTierScore(vehicle?.tier);
+}
+
 function getVehicleReach(vehicle) {
   return parseNumber(vehicle.audiencia || vehicle.unique_visitors || 0);
 }
@@ -441,22 +453,65 @@ async function getLatestTerritorySnapshot(territorioId) {
   return data;
 }
 
-async function getTerritoryVehicles(territorioId) {
-  const { data: links, error: linksError } = await supabase
+async function getTerritoryVehicles(territoryId) {
+  const { data, error } = await supabase
     .from("territorio_veiculos")
-    .select("veiculo_id")
-    .eq("territorio_id", territorioId)
+    .select(`
+      id,
+      territorio_id,
+      veiculo_id,
+      tier,
+      peso,
+      ativo,
+      veiculos (
+        id,
+        nome,
+        nome_normalizado,
+        tipo_midia,
+        audiencia,
+        unique_visitors,
+        tiragem,
+        valor_cm,
+        valor_segundo,
+        cpm_ref,
+        valor_pagina,
+        segmento,
+        praca,
+        ativo
+      )
+    `)
+    .eq("territorio_id", territoryId)
     .eq("ativo", true);
 
-  if (linksError) {
-    throw new Error(`Erro ao buscar veículos do território: ${linksError.message}`);
+  if (error) {
+    throw new Error(`Erro ao buscar veículos do território: ${error.message}`);
   }
 
-  const vehicleIds = (links || []).map((item) => item.veiculo_id).filter(Boolean);
+  return (data || [])
+    .filter((item) => item.veiculos && item.veiculos.ativo !== false)
+    .map((item) => ({
+      territoryVehicleId: item.id,
+      territorioId: item.territorio_id,
+      veiculoId: item.veiculo_id,
 
-  if (!vehicleIds.length) {
-    return [];
-  }
+      tier: item.tier,
+      peso: item.peso,
+
+      id: item.veiculos.id,
+      nome: item.veiculos.nome,
+      nome_normalizado: item.veiculos.nome_normalizado,
+      tipo_midia: item.veiculos.tipo_midia,
+      audiencia: item.veiculos.audiencia,
+      unique_visitors: item.veiculos.unique_visitors,
+      tiragem: item.veiculos.tiragem,
+      valor_cm: item.veiculos.valor_cm,
+      valor_segundo: item.veiculos.valor_segundo,
+      cpm_ref: item.veiculos.cpm_ref,
+      valor_pagina: item.veiculos.valor_pagina,
+      segmento: item.veiculos.segmento,
+      praca: item.veiculos.praca,
+    }));
+}
 
   const { data: vehicles, error: vehiclesError } = await supabase
     .from("veiculos")
@@ -560,7 +615,7 @@ function calculateBuzz({
   }, 0);
 
   const occupiedVehicleQuality = calculateAverage(
-    occupiedVehicles.map((vehicle) => tierToScore(vehicle.tier))
+    occupiedVehicles.map((vehicle) => getVehicleQualityScore(vehicle))
   );
 
   const occupiedPlaces = new Set(

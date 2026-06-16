@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
   BarChart,
@@ -2057,6 +2057,16 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
   const [loadingReputation, setLoadingReputation] = useState(false);
   const [reputationError, setReputationError] = useState("");
 
+  const [aiJob, setAiJob] = useState(null);
+  const [aiJobCounts, setAiJobCounts] = useState(null);
+  const [aiJobRecentItems, setAiJobRecentItems] = useState([]);
+  const [aiJobError, setAiJobError] = useState("");
+  const [aiJobLoading, setAiJobLoading] = useState(false);
+  const [aiJobRunning, setAiJobRunning] = useState(false);
+  const [aiJobLastProcessed, setAiJobLastProcessed] = useState(null);
+
+  const aiJobRunningRef = useRef(false);
+
   const selectedClientId =
     selectedClient?.id ||
     selectedClient?.clientId ||
@@ -2064,24 +2074,44 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
     "";
 
   const indexData = reputationData?.indexes
-  ? buildReputationIndexDataFromApi(reputationData)
-  : reputationIndexData;
+    ? buildReputationIndexDataFromApi(reputationData)
+    : reputationIndexData;
 
-  const loadReputation = async ({ runAi = false, forceReanalyze = false, limit = 10 } = {}) => {
+  async function readJsonResponse(response, fallbackMessage = "A API retornou uma resposta inválida.") {
+    const text = await response.text();
+
+    let data;
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(text?.slice(0, 500) || fallbackMessage);
+    }
+
+    if (!response.ok || data.ok === false) {
+      throw new Error(data.error || data.message || fallbackMessage);
+    }
+
+    return data;
+  }
+
+  function validateReputationInputs() {
     if (!selectedClientId) {
-      setReputationError("Selecione um cliente antes de calcular reputação.");
-      return;
+      throw new Error("Selecione um cliente antes de calcular reputação.");
     }
 
     if (!startDate || !endDate) {
-      setReputationError("Informe data inicial e data final antes de calcular reputação.");
-      return;
+      throw new Error("Informe data inicial e data final antes de calcular reputação.");
     }
+  }
 
-    setLoadingReputation(true);
-    setReputationError("");
-
+  async function loadReputation({ runAi = false, forceReanalyze = false, limit = 10 } = {}) {
     try {
+      validateReputationInputs();
+
+      setLoadingReputation(true);
+      setReputationError("");
+
       const params = new URLSearchParams({
         clientId: selectedClientId,
         startDate,
@@ -2093,11 +2123,7 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
       if (forceReanalyze) params.set("forceReanalyze", "true");
 
       const response = await fetch(`/api/get-reputation-test?${params.toString()}`);
-      const data = await response.json();
-
-      if (!response.ok || data.ok === false) {
-        throw new Error(data.error || "Erro ao carregar dados de reputação.");
-      }
+      const data = await readJsonResponse(response, "Erro ao carregar dados de reputação.");
 
       setReputationData(data);
     } catch (error) {
@@ -2105,7 +2131,188 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
     } finally {
       setLoadingReputation(false);
     }
-  };
+  }
+
+  async function loadAiJobStatus(jobId) {
+    const params = new URLSearchParams({
+      jobId,
+    });
+
+    const response = await fetch(`/api/ai-analysis-job-status?${params.toString()}`);
+    const data = await readJsonResponse(response, "Erro ao consultar status da fila IA.");
+
+    setAiJob(data.job || null);
+    setAiJobCounts(data.counts || null);
+    setAiJobRecentItems(data.recentItems || []);
+
+    return data;
+  }
+
+  async function createOrResumeAiJob({ recreate = false } = {}) {
+    validateReputationInputs();
+
+    const params = new URLSearchParams({
+      clientId: selectedClientId,
+      startDate,
+      endDate,
+    });
+
+    if (recreate) params.set("recreate", "true");
+
+    const response = await fetch(`/api/ai-analysis-job-create?${params.toString()}`);
+    const data = await readJsonResponse(response, "Erro ao criar ou retomar fila IA.");
+
+    setAiJob(data.job || null);
+    setAiJobCounts(data.counts || null);
+    setAiJobLastProcessed(null);
+
+    if (data.job?.id) {
+      await loadAiJobStatus(data.job.id);
+    }
+
+    return data.job;
+  }
+
+  async function handleCreateOrResumeJob() {
+    setAiJobLoading(true);
+    setAiJobError("");
+
+    try {
+      await createOrResumeAiJob();
+    } catch (error) {
+      setAiJobError(error.message || "Erro ao criar ou retomar fila IA.");
+    } finally {
+      setAiJobLoading(false);
+    }
+  }
+
+  async function processNextJobItem(jobId) {
+    const params = new URLSearchParams({
+      jobId,
+    });
+
+    const response = await fetch(`/api/ai-analysis-job-process-next?${params.toString()}`);
+    const data = await readJsonResponse(response, "Erro ao processar próximo item da fila IA.");
+
+    if (data.processedItem) {
+      setAiJobLastProcessed(data.processedItem);
+    }
+
+    if (data.counts) {
+      setAiJobCounts(data.counts);
+    }
+
+    await loadAiJobStatus(jobId);
+
+    return data;
+  }
+
+  async function handleProcessOneJobItem() {
+    setAiJobLoading(true);
+    setAiJobError("");
+
+    try {
+      const currentJob = aiJob?.id ? aiJob : await createOrResumeAiJob();
+
+      if (!currentJob?.id) {
+        throw new Error("Não foi possível identificar a fila IA.");
+      }
+
+      await processNextJobItem(currentJob.id);
+    } catch (error) {
+      setAiJobError(error.message || "Erro ao processar item da fila IA.");
+    } finally {
+      setAiJobLoading(false);
+    }
+  }
+
+  async function handleStartJobLoop() {
+    setAiJobError("");
+    setAiJobLoading(true);
+    setAiJobRunning(true);
+    aiJobRunningRef.current = true;
+
+    try {
+      const currentJob = aiJob?.id ? aiJob : await createOrResumeAiJob();
+
+      if (!currentJob?.id) {
+        throw new Error("Não foi possível identificar a fila IA.");
+      }
+
+      setAiJobLoading(false);
+
+      while (aiJobRunningRef.current) {
+        const data = await processNextJobItem(currentJob.id);
+
+        if (data.done || data.counts?.pendingItems === 0) {
+          aiJobRunningRef.current = false;
+          setAiJobRunning(false);
+          await loadAiJobStatus(currentJob.id);
+          break;
+        }
+
+        await new Promise((resolve) => window.setTimeout(resolve, 700));
+      }
+    } catch (error) {
+      aiJobRunningRef.current = false;
+      setAiJobRunning(false);
+      setAiJobLoading(false);
+      setAiJobError(error.message || "Erro ao processar fila IA.");
+    }
+  }
+
+  function handlePauseJobLoop() {
+    aiJobRunningRef.current = false;
+    setAiJobRunning(false);
+  }
+
+  async function handleRefreshJobStatus() {
+    if (!aiJob?.id) {
+      setAiJobError("Crie ou retome uma fila antes de atualizar o status.");
+      return;
+    }
+
+    setAiJobLoading(true);
+    setAiJobError("");
+
+    try {
+      await loadAiJobStatus(aiJob.id);
+    } catch (error) {
+      setAiJobError(error.message || "Erro ao atualizar status da fila IA.");
+    } finally {
+      setAiJobLoading(false);
+    }
+  }
+
+  async function handleResetJobErrors() {
+    if (!aiJob?.id) {
+      setAiJobError("Crie ou retome uma fila antes de resetar erros.");
+      return;
+    }
+
+    setAiJobLoading(true);
+    setAiJobError("");
+
+    try {
+      const params = new URLSearchParams({
+        jobId: aiJob.id,
+      });
+
+      const response = await fetch(`/api/ai-analysis-job-reset-errors?${params.toString()}`);
+      await readJsonResponse(response, "Erro ao resetar erros da fila IA.");
+      await loadAiJobStatus(aiJob.id);
+    } catch (error) {
+      setAiJobError(error.message || "Erro ao resetar erros da fila IA.");
+    } finally {
+      setAiJobLoading(false);
+    }
+  }
+
+  const aiProgress = aiJobCounts?.progress || 0;
+  const hasAiJob = Boolean(aiJob?.id);
+  const aiJobDone =
+    aiJobCounts?.totalItems > 0 &&
+    aiJobCounts?.processedItems >= aiJobCounts?.totalItems;
 
   return (
     <div className="space-y-4">
@@ -2198,6 +2405,205 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
         )}
       </Card>
 
+      <Card className="p-5">
+        <div className="flex flex-col gap-4 border-b border-white/10 pb-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <SectionTitle>Fila de análise IA do recorte</SectionTitle>
+            <p className="mt-1 max-w-4xl text-sm leading-relaxed text-slate-400">
+              Processa as publicações com URL uma a uma, salva o status no banco e permite retomar se a tela fechar ou o sistema cair.
+            </p>
+
+            {aiJob?.id && (
+              <p className="mt-2 text-xs text-slate-500">
+                Job: <span className="text-slate-300">{aiJob.id}</span> · Status:{" "}
+                <span className="text-slate-300">{aiJob.status || "—"}</span>
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2 xl:justify-end">
+            <button
+              type="button"
+              onClick={handleCreateOrResumeJob}
+              disabled={aiJobLoading || aiJobRunning}
+              className="rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {aiJobLoading && !aiJobRunning ? "Carregando..." : "Criar/retomar fila"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleProcessOneJobItem}
+              disabled={aiJobLoading || aiJobRunning || aiJobDone}
+              className="rounded-xl border border-violet-300/20 bg-violet-300/10 px-4 py-3 text-sm font-medium text-violet-100 transition hover:bg-violet-300/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Processar 1 item
+            </button>
+
+            {!aiJobRunning ? (
+              <button
+                type="button"
+                onClick={handleStartJobLoop}
+                disabled={aiJobLoading || aiJobDone}
+                className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-300/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Processar automaticamente
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handlePauseJobLoop}
+                className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm font-medium text-amber-100 transition hover:bg-amber-300/20"
+              >
+                Pausar
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleRefreshJobStatus}
+              disabled={!hasAiJob || aiJobLoading}
+              className="rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Atualizar
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetJobErrors}
+              disabled={!hasAiJob || aiJobLoading || aiJobRunning}
+              className="rounded-xl border border-red-300/20 bg-red-300/10 px-4 py-3 text-sm font-medium text-red-100 transition hover:bg-red-300/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Resetar erros
+            </button>
+          </div>
+        </div>
+
+        {aiJobError && (
+          <div className="mt-4 rounded-xl border border-red-300/20 bg-red-300/10 px-4 py-3 text-sm text-red-100">
+            {aiJobError}
+          </div>
+        )}
+
+        {aiJobCounts ? (
+          <>
+            <div className="mt-5">
+              <div className="flex items-center justify-between gap-3 text-xs text-slate-400">
+                <span>Progresso da fila</span>
+                <span>{formatIndexValue(aiProgress)}%</span>
+              </div>
+
+              <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-950">
+                <div
+                  className="h-full rounded-full bg-emerald-300 transition-all"
+                  style={{ width: `${Math.min(100, Math.max(0, aiProgress))}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+              {[
+                ["Total", aiJobCounts.totalItems],
+                ["Processados", aiJobCounts.processedItems],
+                ["Pendentes", aiJobCounts.pendingItems],
+                ["Processando", aiJobCounts.processingItems],
+                ["Válidos", aiJobCounts.validItems],
+                ["Inválidos", aiJobCounts.invalidItems],
+                ["Erros", aiJobCounts.errorItems],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+                  <p className="mt-1 font-serif text-3xl text-white">
+                    {formatIntegerValue(value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/45 px-4 py-4 text-sm text-slate-400">
+            Nenhuma fila carregada para este recorte. Clique em “Criar/retomar fila”.
+          </div>
+        )}
+
+        {aiJobLastProcessed && (
+          <div className="mt-5 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+            <p className="text-xs uppercase tracking-wide text-emerald-100">
+              Último item processado
+            </p>
+            <p className="mt-2 text-sm font-medium text-white">
+              {aiJobLastProcessed.title || "Sem título"}
+            </p>
+            <p className="mt-1 text-xs text-emerald-50/80">
+              {aiJobLastProcessed.vehicle || "Veículo não informado"} · {aiJobLastProcessed.status}
+            </p>
+            {aiJobLastProcessed.reason && (
+              <p className="mt-2 text-xs leading-relaxed text-emerald-50/80">
+                {aiJobLastProcessed.reason}
+              </p>
+            )}
+          </div>
+        )}
+
+        {aiJobRecentItems?.length > 0 && (
+          <div className="mt-5 overflow-x-auto">
+            <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">
+              Itens recentes da fila
+            </p>
+
+            <table className="w-full min-w-[900px] border-separate border-spacing-y-2 text-left text-sm">
+              <thead>
+                <tr className="text-xs uppercase tracking-wide text-slate-500">
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Publicação</th>
+                  <th className="px-3 py-2">Veículo</th>
+                  <th className="px-3 py-2">Tentativas</th>
+                  <th className="px-3 py-2">Quali</th>
+                  <th className="px-3 py-2">Motivo</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {aiJobRecentItems.map((item) => (
+                  <tr key={item.id} className="bg-slate-950/45">
+                    <td className="rounded-l-xl border-y border-l border-white/10 px-3 py-3">
+                      <span className={`rounded-full px-2.5 py-1 text-xs ${
+                        item.status === "valid"
+                          ? "border border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+                          : item.status === "invalid"
+                            ? "border border-amber-300/20 bg-amber-300/10 text-amber-100"
+                            : item.status === "error"
+                              ? "border border-red-300/20 bg-red-300/10 text-red-100"
+                              : item.status === "processing"
+                                ? "border border-cyan-300/20 bg-cyan-300/10 text-cyan-100"
+                                : "border border-white/10 bg-white/5 text-slate-300"
+                      }`}>
+                        {item.status}
+                      </span>
+                    </td>
+                    <td className="max-w-[360px] border-y border-white/10 px-3 py-3 text-slate-100">
+                      <p className="line-clamp-2">{item.raw_data?.title || "Sem título"}</p>
+                    </td>
+                    <td className="border-y border-white/10 px-3 py-3 text-slate-300">
+                      {item.raw_data?.vehicle || "—"}
+                    </td>
+                    <td className="border-y border-white/10 px-3 py-3 text-slate-300">
+                      {formatIntegerValue(item.attempts)}
+                    </td>
+                    <td className="border-y border-white/10 px-3 py-3 text-slate-300">
+                      {formatIndexValue(item.quali_value)}
+                    </td>
+                    <td className="rounded-r-xl border-y border-r border-white/10 px-3 py-3 text-xs leading-relaxed text-slate-400">
+                      {item.reason || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
       <TerritoryDataBlock data={reputationData?.territory} />
 
       {indexData.map((index) => (
@@ -2254,7 +2660,6 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
     </div>
   );
 }
-
 function DataManagementPage() {
   const [selectedClientId, setSelectedClientId] = useState("cliente_x");
   const [sheetName, setSheetName] = useState("CLIENTEX");

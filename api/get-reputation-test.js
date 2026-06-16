@@ -133,23 +133,26 @@ function getVehicleQualityScore(vehicle) {
     return Number(vehicle.peso);
   }
 
-  return getTierScore(vehicle?.tier);
+  return tierToScore(vehicle?.tier);
 }
 
 function getVehicleReach(vehicle) {
-  return parseNumber(vehicle.audiencia || vehicle.unique_visitors || 0);
+  return parseNumber(vehicle?.audiencia || vehicle?.unique_visitors || 0);
 }
 
 function getVehiclePotentialReturn(vehicle) {
-  const valorPagina = parseNumber(vehicle.valor_pagina);
-  const valorSegundo = parseNumber(vehicle.valor_segundo);
-  const valorCm = parseNumber(vehicle.valor_cm);
-  const cpm = parseNumber(vehicle.cpm_ref);
+  const valorPagina = parseNumber(vehicle?.valor_pagina);
+  const retornoMidiaMedio = parseNumber(vehicle?.raw_data?.retorno_midia_medio);
+  const valorSegundo = parseNumber(vehicle?.valor_segundo);
+  const valorCm = parseNumber(vehicle?.valor_cm);
+  const cmMedio = parseNumber(vehicle?.raw_data?.cm_medio);
+  const cpm = parseNumber(vehicle?.cpm_ref);
   const reach = getVehicleReach(vehicle);
 
   if (valorPagina > 0) return valorPagina;
+  if (retornoMidiaMedio > 0) return retornoMidiaMedio;
+  if (valorCm > 0 && cmMedio > 0) return valorCm * cmMedio;
   if (valorSegundo > 0) return valorSegundo;
-  if (valorCm > 0) return valorCm;
   if (cpm > 0 && reach > 0) return (reach / 1000) * cpm;
 
   return 0;
@@ -216,10 +219,19 @@ function buildVehicleIndex(vehicles) {
   const index = new Map();
 
   for (const vehicle of vehicles) {
-    const name = normalizeVehicleName(vehicle.nome || vehicle.name || vehicle.vehicle);
+    const possibleNames = [
+      vehicle.nome,
+      vehicle.name,
+      vehicle.vehicle,
+      vehicle.nome_normalizado,
+    ];
 
-    if (name && !index.has(name)) {
-      index.set(name, vehicle);
+    for (const possibleName of possibleNames) {
+      const name = normalizeVehicleName(possibleName);
+
+      if (name && !index.has(name)) {
+        index.set(name, vehicle);
+      }
     }
   }
 
@@ -433,84 +445,88 @@ async function getActiveTerritory(clientId) {
 
   return data;
 }
-async function getLatestTerritorySnapshot(territorioId) {
-  const { data, error } = await supabase
-    .from("territorio_snapshots")
-    .select("*")
-    .eq("territorio_id", territorioId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Erro ao buscar snapshot do território: ${error.message}`);
-  }
-
-  if (!data) {
-    throw new Error("Nenhum snapshot encontrado para o território ativo.");
-  }
-
-  return data;
-}
 
 async function getTerritoryVehicles(territoryId) {
-  const { data, error } = await supabase
+  const { data: territoryRows, error: territoryError } = await supabase
     .from("territorio_veiculos")
-    .select(`
-      id,
-      territorio_id,
-      veiculo_id,
-      tier,
-      peso,
-      ativo,
-      veiculos (
-        id,
-        nome,
-        nome_normalizado,
-        tipo_midia,
-        audiencia,
-        unique_visitors,
-        tiragem,
-        valor_cm,
-        valor_segundo,
-        cpm_ref,
-        valor_pagina,
-        segmento,
-        praca,
-        ativo
-      )
-    `)
+    .select("id, territorio_id, veiculo_id, tier, peso, ativo")
     .eq("territorio_id", territoryId)
     .eq("ativo", true);
 
-  if (error) {
-    throw new Error(`Erro ao buscar veículos do território: ${error.message}`);
+  if (territoryError) {
+    throw new Error(`Erro ao buscar vínculos do território: ${territoryError.message}`);
   }
 
-  return (data || [])
-    .filter((item) => item.veiculos && item.veiculos.ativo !== false)
-    .map((item) => ({
-      territoryVehicleId: item.id,
-      territorioId: item.territorio_id,
-      veiculoId: item.veiculo_id,
+  const vehicleIds = (territoryRows || [])
+    .map((item) => item.veiculo_id)
+    .filter(Boolean);
 
-      tier: item.tier,
-      peso: item.peso,
+  if (!vehicleIds.length) {
+    return [];
+  }
 
-      id: item.veiculos.id,
-      nome: item.veiculos.nome,
-      nome_normalizado: item.veiculos.nome_normalizado,
-      tipo_midia: item.veiculos.tipo_midia,
-      audiencia: item.veiculos.audiencia,
-      unique_visitors: item.veiculos.unique_visitors,
-      tiragem: item.veiculos.tiragem,
-      valor_cm: item.veiculos.valor_cm,
-      valor_segundo: item.veiculos.valor_segundo,
-      cpm_ref: item.veiculos.cpm_ref,
-      valor_pagina: item.veiculos.valor_pagina,
-      segmento: item.veiculos.segmento,
-      praca: item.veiculos.praca,
-    }));
+  const { data: vehicles, error: vehiclesError } = await supabase
+    .from("veiculos")
+    .select(`
+      id,
+      nome,
+      nome_normalizado,
+      tipo_midia,
+      audiencia,
+      unique_visitors,
+      tiragem,
+      valor_cm,
+      valor_segundo,
+      cpm_ref,
+      valor_pagina,
+      segmento,
+      praca,
+      ativo,
+      raw_data
+    `)
+    .in("id", vehicleIds);
+
+  if (vehiclesError) {
+    throw new Error(`Erro ao buscar veículos: ${vehiclesError.message}`);
+  }
+
+  const vehiclesById = new Map(
+    (vehicles || []).map((vehicle) => [vehicle.id, vehicle])
+  );
+
+  return (territoryRows || [])
+    .map((item) => {
+      const vehicle = vehiclesById.get(item.veiculo_id);
+
+      if (!vehicle || vehicle.ativo === false) {
+        return null;
+      }
+
+      return {
+        territoryVehicleId: item.id,
+        territorioId: item.territorio_id,
+        veiculoId: item.veiculo_id,
+
+        tier: item.tier,
+        peso: item.peso,
+
+        id: vehicle.id,
+        nome: vehicle.nome,
+        nome_normalizado: vehicle.nome_normalizado,
+        tipo_midia: vehicle.tipo_midia,
+        audiencia: vehicle.audiencia,
+        unique_visitors: vehicle.unique_visitors,
+        tiragem: vehicle.tiragem,
+        valor_cm: vehicle.valor_cm,
+        valor_segundo: vehicle.valor_segundo,
+        cpm_ref: vehicle.cpm_ref,
+        valor_pagina: vehicle.valor_pagina,
+        segmento: vehicle.segmento,
+        praca: vehicle.praca,
+        raw_data: vehicle.raw_data || {},
+      };
+    })
+    .filter(Boolean);
 }
 
 async function getClientData(clientId) {
@@ -539,7 +555,7 @@ async function getPublications({ clientId, startDate, endDate }) {
   }
 
   if (endDate) {
-    query = query.lte("data_publicacao", endDate);
+    query = query.lt("data_publicacao", endDate);
   }
 
   const { data, error } = await query;
@@ -551,12 +567,62 @@ async function getPublications({ clientId, startDate, endDate }) {
   return data || [];
 }
 
+function calculateTerritoryMetrics(vehicles = []) {
+  const activeVehicles = vehicles.filter((vehicle) => vehicle);
+
+  const totalVehicles = activeVehicles.length;
+
+  const potentialReach = activeVehicles.reduce((sum, vehicle) => {
+    return sum + getVehicleReach(vehicle);
+  }, 0);
+
+  const potentialReturn = activeVehicles.reduce((sum, vehicle) => {
+    return sum + getVehiclePotentialReturn(vehicle);
+  }, 0);
+
+  const qualityValues = activeVehicles
+    .map((vehicle) => getVehicleQualityScore(vehicle))
+    .filter((value) => value !== null && value !== undefined && !Number.isNaN(Number(value)));
+
+  const averageTier = calculateAverage(qualityValues);
+
+  const territoryPlaces = new Set(
+    activeVehicles
+      .map((vehicle) => normalizeKey(vehicle.praca || vehicle.uf || vehicle.regiao || ""))
+      .filter(Boolean)
+  );
+
+  const geographicCapillarity = territoryPlaces.size;
+
+  return {
+    totalVehicles,
+    potentialReach,
+    potentialReturn,
+    averageTier,
+    geographicCapillarity,
+    completeness: {
+      vehiclesWithReach: activeVehicles.filter((vehicle) => getVehicleReach(vehicle) > 0).length,
+      vehiclesWithoutReach: activeVehicles.filter((vehicle) => getVehicleReach(vehicle) <= 0).length,
+      vehiclesWithReturn: activeVehicles.filter((vehicle) => getVehiclePotentialReturn(vehicle) > 0).length,
+      vehiclesWithoutReturn: activeVehicles.filter((vehicle) => getVehiclePotentialReturn(vehicle) <= 0).length,
+      vehiclesWithType: activeVehicles.filter((vehicle) => vehicle.tipo_midia).length,
+      vehiclesWithPlace: activeVehicles.filter((vehicle) => vehicle.praca).length,
+      vehiclesWithWeight: activeVehicles.filter(
+        (vehicle) =>
+          vehicle.peso !== null &&
+          vehicle.peso !== undefined &&
+          !Number.isNaN(Number(vehicle.peso))
+      ).length,
+    },
+  };
+}
+
 function calculateBuzz({
   territory,
-  snapshot,
   vehicles,
   publications,
 }) {
+  const territoryMetrics = calculateTerritoryMetrics(vehicles);
   const vehicleIndex = buildVehicleIndex(vehicles);
 
   const matchedPublications = [];
@@ -586,10 +652,10 @@ function calculateBuzz({
 
   const occupiedVehicles = Array.from(occupiedVehicleMap.values());
 
-  const totalTerritoryVehicles = Number(snapshot.total_veiculos || vehicles.length || 0);
-  const territoryReachPotential = Number(snapshot.alcance_potencial || 0);
-  const territoryReturnPotential = Number(snapshot.retorno_potencial || 0);
-  const territoryCapillarity = Number(snapshot.capilaridade_geografica || 0);
+  const totalTerritoryVehicles = territoryMetrics.totalVehicles;
+  const territoryReachPotential = territoryMetrics.potentialReach;
+  const territoryReturnPotential = territoryMetrics.potentialReturn;
+  const territoryCapillarity = territoryMetrics.geographicCapillarity;
 
   const occupiedVehiclesCount = occupiedVehicles.length;
 
@@ -653,7 +719,7 @@ function calculateBuzz({
         occupiedVehicleQuality,
         maxScale: 100,
       },
-      formula: "média dos scores dos veículos ocupados",
+      formula: "média dos pesos dos veículos ocupados no território",
     },
     capturedCapillarity: {
       label: "Capilaridade capturada",
@@ -699,6 +765,7 @@ function calculateBuzz({
       matchedPublications: matchedPublications.length,
       unmatchedPublications: unmatchedPublications.length,
       occupiedVehicles: occupiedVehiclesCount,
+      territoryCompleteness: territoryMetrics.completeness,
       unmatchedExamples: unmatchedPublications.slice(0, 20),
     },
   };
@@ -791,7 +858,7 @@ async function collectCompleteAnalyses({
 
       const analysis = getReputationAnalysisFromResponse(data);
       const quality = classifyAiAnalysisQuality(data);
-      
+
       if (!quality.validForQuali) {
         attempts.push({
           ...attemptBase,
@@ -801,9 +868,9 @@ async function collectCompleteAnalyses({
         });
         continue;
       }
-      
+
       const qualiValue = calculateQualiFromAnalysis(analysis);
-      
+
       completeAnalyses.push({
         ...attemptBase,
         status: "valida",
@@ -815,15 +882,13 @@ async function collectCompleteAnalyses({
         source: data.source || null,
         qualiValue,
       });
-      
+
       attempts.push({
         ...attemptBase,
         status: "valida",
         validForQuali: true,
         qualiValue,
       });
-
-      
     } catch (error) {
       attempts.push({
         ...attemptBase,
@@ -1039,6 +1104,7 @@ function calculateQuali(completeAnalyses = []) {
     },
   };
 }
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "GET" && req.method !== "POST") {
@@ -1057,8 +1123,6 @@ export default async function handler(req, res) {
     const forceReanalyze = String(input.forceReanalyze || "false") === "true";
     const runAi = String(input.runAi || "false") === "true";
 
-    
-
     if (!clientId) {
       return res.status(400).json({
         ok: false,
@@ -1074,8 +1138,8 @@ export default async function handler(req, res) {
     }
 
     const territory = await getActiveTerritory(clientId);
-    const snapshot = await getLatestTerritorySnapshot(territory.id);
     const vehicles = await getTerritoryVehicles(territory.id);
+    const territoryMetrics = calculateTerritoryMetrics(vehicles);
     const client = await getClientData(clientId);
     const publications = await getPublications({
       clientId,
@@ -1087,18 +1151,19 @@ export default async function handler(req, res) {
       id: territory.id,
       name: territory.nome,
       version: territory.versao,
-      snapshotId: snapshot.id,
-      totalVehicles: Number(snapshot.total_veiculos || 0),
-      potentialReach: Number(snapshot.alcance_potencial || 0),
-      potentialReturn: Number(snapshot.retorno_potencial || 0),
-      averageTier: Number(snapshot.tier_medio || 0),
-      geographicCapillarity: Number(snapshot.capilaridade_geografica || 0),
-      createdAt: snapshot.created_at,
+      clientId: territory.client_id,
+      snapshotId: null,
+      totalVehicles: territoryMetrics.totalVehicles,
+      potentialReach: Number(territoryMetrics.potentialReach.toFixed(2)),
+      potentialReturn: Number(territoryMetrics.potentialReturn.toFixed(2)),
+      averageTier: Number(territoryMetrics.averageTier.toFixed(2)),
+      geographicCapillarity: territoryMetrics.geographicCapillarity,
+      completeness: territoryMetrics.completeness,
+      createdAt: territory.created_at,
     };
 
     const buzz = calculateBuzz({
       territory,
-      snapshot,
       vehicles,
       publications,
     });
@@ -1117,9 +1182,9 @@ export default async function handler(req, res) {
           attempts: [],
           candidatesCount: 0,
         };
-    
+
     const quali = calculateQuali(analysisCollection.completeAnalyses);
-    
+
     const icrValue =
       quali.value === null || quali.value === undefined
         ? null

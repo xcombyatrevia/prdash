@@ -2142,7 +2142,7 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
 
             <button
               type="button"
-              onClick={() => loadReputation({ runAi: true, forceReanalyze: false, limit: 10 })}
+              onClick={() => loadReputation({ runAi: true, forceReanalyze: false, limit: 1 })}
               disabled={loadingReputation}
               className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-300/20 disabled:cursor-not-allowed disabled:opacity-60"
             >

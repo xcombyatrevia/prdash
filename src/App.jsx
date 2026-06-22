@@ -603,23 +603,8 @@ function normalizeSupabaseMonthly(row) {
 }
 
 
-function buildMonthlyWindowFromPeriod(monthlyData, startDate, endDate) {
-  if (!startDate || !endDate) {
-    return [...monthlyData].sort((a, b) =>
-      (a.sortKey || a.month).localeCompare(b.sortKey || b.month)
-    );
-  }
-
-  const startYear = Number(String(startDate).slice(0, 4));
-  const endYear = Number(String(endDate).slice(0, 4));
-  const startMonth = Number(String(startDate).slice(5, 7));
-  const endMonth = Number(String(endDate).slice(5, 7));
-
-  if (!startYear || !endYear || !startMonth || !endMonth) {
-    return [...monthlyData].sort((a, b) =>
-      (a.sortKey || a.month).localeCompare(b.sortKey || b.month)
-    );
-  }
+function buildMonthlyWindowFromPeriod(monthlyData, selectedYear, selectedMonth) {
+  const numericYear = Number(selectedYear) || new Date().getFullYear();
 
   const monthlyMap = new Map();
 
@@ -631,35 +616,54 @@ function buildMonthlyWindowFromPeriod(monthlyData, startDate, endDate) {
 
   const result = [];
 
-  let year = startYear;
-  let month = startMonth;
+  if (selectedMonth === "all") {
+    for (let month = 1; month <= 12; month += 1) {
+      const sortKey = `${numericYear}-${String(month).padStart(2, "0")}`;
+      const existing = monthlyMap.get(sortKey);
 
-  while (year < endYear || (year === endYear && month <= endMonth)) {
-    const sortKey = `${year}-${String(month).padStart(2, "0")}`;
+      result.push(
+        existing || {
+          sortKey,
+          month: `${monthNames[month - 1] || month}/${String(numericYear).slice(-2)}`,
+          year: numericYear,
+          monthNumber: month,
+          publications: 0,
+          mediaValue: 0,
+          reach: 0,
+        }
+      );
+    }
+
+    return result;
+  }
+
+  const selectedMonthNumber = Number(selectedMonth) || new Date().getMonth() + 1;
+  const endDate = new Date(numericYear, selectedMonthNumber - 1, 1);
+
+  for (let index = 11; index >= 0; index -= 1) {
+    const date = new Date(endDate.getFullYear(), endDate.getMonth() - index, 1);
+    const year = date.getFullYear();
+    const monthNumber = date.getMonth() + 1;
+    const sortKey = `${year}-${String(monthNumber).padStart(2, "0")}`;
     const existing = monthlyMap.get(sortKey);
 
     result.push(
       existing || {
         sortKey,
-        month: `${monthNames[month - 1] || month}/${String(year).slice(-2)}`,
+        month: `${monthNames[monthNumber - 1] || monthNumber}/${String(year).slice(-2)}`,
         year,
-        monthNumber: month,
+        monthNumber,
         publications: 0,
         mediaValue: 0,
         reach: 0,
       }
     );
-
-    month += 1;
-
-    if (month > 12) {
-      month = 1;
-      year += 1;
-    }
   }
 
   return result;
 }
+
+
 
 
 function normalizeVehicle(row) {
@@ -3483,8 +3487,8 @@ export default function PRDashboard() {
   }, [filteredPublications]);
 
   const monthlyWindow = useMemo(
-    () => buildMonthlyWindowFromPeriod(monthlyData, startDate, endDate),
-    [monthlyData, startDate, endDate]
+    () => buildMonthlyWindowFromPeriod(monthlyData, selectedYear, selectedMonth),
+    [monthlyData, selectedYear, selectedMonth]
   );
 
   const vehicleIndex = useMemo(() => buildVehicleIndex(vehicles), [vehicles]);

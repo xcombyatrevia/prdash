@@ -93,6 +93,53 @@ const FALLBACK_MONTHLY = [
 
 const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
+const MONTH_FILTER_OPTIONS = [
+  { value: "01", label: "Janeiro" },
+  { value: "02", label: "Fevereiro" },
+  { value: "03", label: "Março" },
+  { value: "04", label: "Abril" },
+  { value: "05", label: "Maio" },
+  { value: "06", label: "Junho" },
+  { value: "07", label: "Julho" },
+  { value: "08", label: "Agosto" },
+  { value: "09", label: "Setembro" },
+  { value: "10", label: "Outubro" },
+  { value: "11", label: "Novembro" },
+  { value: "12", label: "Dezembro" },
+  { value: "all", label: "Todos" },
+];
+
+function getYearFromDateInput(dateString) {
+  const year = Number(String(dateString || "").slice(0, 4));
+  return year || new Date().getFullYear();
+}
+
+function getMonthFromDateInput(dateString) {
+  const month = String(dateString || "").slice(5, 7);
+  return month || String(new Date().getMonth() + 1).padStart(2, "0");
+}
+
+function getDateRangeFromMonthYear(year, month) {
+  const numericYear = Number(year) || new Date().getFullYear();
+
+  if (month === "all") {
+    return {
+      startDate: `${numericYear}-01-01`,
+      endDate: `${numericYear}-12-31`,
+    };
+  }
+
+  const monthIndex = Number(month) - 1;
+
+  const start = new Date(numericYear, monthIndex, 1);
+  const end = new Date(numericYear, monthIndex + 1, 0);
+
+  return {
+    startDate: toInputDate(start),
+    endDate: toInputDate(end),
+  };
+}
+
 function removeAccents(value) {
   return String(value || "")
     .normalize("NFD")
@@ -3028,6 +3075,15 @@ export default function PRDashboard() {
   const [rules, setRules] = useState([]);
   const [startDate, setStartDate] = useState(defaultDateRange.startDate);
   const [endDate, setEndDate] = useState(defaultDateRange.endDate);
+
+  const [selectedYear, setSelectedYear] = useState(() =>
+    getYearFromDateInput(defaultDateRange.startDate)
+  );
+  
+  const [selectedMonth, setSelectedMonth] = useState(() =>
+    getMonthFromDateInput(defaultDateRange.startDate)
+  );
+  
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [lastUpdated, setLastUpdated] = useState("dados estáticos iniciais");
@@ -3130,9 +3186,14 @@ export default function PRDashboard() {
   
       if (!startDate || !endDate) {
         const latestRange = getLatestPublicationMonthRange(normalizedPublications);
+      
         setStartDate(latestRange.startDate);
         setEndDate(latestRange.endDate);
+        setSelectedYear(getYearFromDateInput(latestRange.startDate));
+        setSelectedMonth(getMonthFromDateInput(latestRange.startDate));
       }
+
+      
       setLastUpdated(
         `${new Date().toLocaleString("pt-BR", {
           dateStyle: "short",
@@ -3277,6 +3338,54 @@ export default function PRDashboard() {
     setSelectedClient(null);
   }
 
+  const yearOptions = useMemo(() => {
+    const years = new Set();
+  
+    publications.forEach((publication) => {
+      const date = publication.publicationDate;
+  
+      if (date instanceof Date && !Number.isNaN(date.getTime())) {
+        years.add(date.getFullYear());
+      }
+    });
+  
+    monthlyData.forEach((item) => {
+      if (item.year) {
+        years.add(Number(item.year));
+      } else if (item.sortKey) {
+        years.add(Number(String(item.sortKey).slice(0, 4)));
+      }
+    });
+  
+    years.add(Number(selectedYear) || new Date().getFullYear());
+  
+    return Array.from(years)
+      .filter(Boolean)
+      .sort((a, b) => b - a);
+  }, [publications, monthlyData, selectedYear]);
+  
+  function handleMonthFilterChange(nextMonth) {
+    setSelectedMonth(nextMonth);
+  
+    const range = getDateRangeFromMonthYear(selectedYear, nextMonth);
+  
+    setStartDate(range.startDate);
+    setEndDate(range.endDate);
+  }
+  
+  function handleYearFilterChange(nextYear) {
+    const numericYear = Number(nextYear);
+  
+    setSelectedYear(numericYear);
+  
+    const range = getDateRangeFromMonthYear(numericYear, selectedMonth);
+  
+    setStartDate(range.startDate);
+    setEndDate(range.endDate);
+  }
+
+
+  
   const filteredPublications = useMemo(() => {
     const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
     const end = endDate ? new Date(`${endDate}T23:59:59`) : null;
@@ -3566,24 +3675,36 @@ export default function PRDashboard() {
             
               <div className="flex w-full flex-wrap items-center justify-end gap-3">
                 <label className="flex h-12 items-center gap-3 rounded-xl border border-white/10 bg-slate-950/70 px-4 text-xs text-slate-400">
-                  <span>Início</span>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(event) => setStartDate(event.target.value)}
+                  <span>Mês</span>
+                
+                  <select
+                    value={selectedMonth}
+                    onChange={(event) => handleMonthFilterChange(event.target.value)}
                     className="bg-transparent text-sm text-slate-100 outline-none"
-                  />
+                  >
+                    {MONTH_FILTER_OPTIONS.map((month) => (
+                      <option key={month.value} value={month.value} className="bg-slate-950 text-slate-100">
+                        {month.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
-            
+                
                 <label className="flex h-12 items-center gap-3 rounded-xl border border-white/10 bg-slate-950/70 px-4 text-xs text-slate-400">
-                  <span>Fim</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(event) => setEndDate(event.target.value)}
+                  <span>Ano</span>
+                
+                  <select
+                    value={selectedYear}
+                    onChange={(event) => handleYearFilterChange(event.target.value)}
                     className="bg-transparent text-sm text-slate-100 outline-none"
-                  />
-                </label>
+                  >
+                    {yearOptions.map((year) => (
+                      <option key={year} value={year} className="bg-slate-950 text-slate-100">
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </label>                
             
                 <button
                   type="button"

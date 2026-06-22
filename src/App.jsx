@@ -987,7 +987,7 @@ function KpiCard({ icon: Icon, label, value, helper, accent = "cyan" }) {
           {label}
         </p>
 
-        <p className="mt-2 break-words font-serif text-4xl leading-tight text-white xl:text-[2.6rem]">
+        <p className="mt-2 break-words font-serif text-3xl leading-tight text-white xl:text-[2rem]">
           {value}
         </p>
 
@@ -3911,54 +3911,52 @@ export default function PRDashboard() {
                 </AnalysisTextCard>
               </section>
 
-              <section className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                <div className="space-y-4">
-                  <ValuationMonthlyCard />
-
-                  <AnalysisTextCard title={selectedPeriodAnalysis?.valoracao_titulo || "Análise da valoração mês a mês"}>
-                    {selectedPeriodAnalysis?.valoracao_texto ||
-                      "Análise não cadastrada para o período."}
-                  </AnalysisTextCard>
-                </div>
+              <section className="mt-4 space-y-4">
+                <ValuationMonthlyCard />
               
-                <div className="space-y-4">
-                  <Card className="p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <SectionTitle>Alcance mês a mês</SectionTitle>
-                        <p className="mt-1 text-sm text-slate-400">
-                          Base Supabase · dados_mensais · histórico independente do filtro
-                        </p>
-                      </div>
-              
-                      <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs text-amber-100">
-                        Audiência
-                      </span>
-                    </div>
-              
-                    <div className="mt-4">
-                      <MonthlyComboChart
-                        data={monthlyWindow}
-                        lineDataKey="reach"
-                        lineLabel="Alcance"
-                        lineColor="#7bc9ff"
-                        lineValueFormatter={formatMillionsLabel}
-                        lineAxisFormatter={(v) => `${v}M`}
-                      /> 
-                    </div>
-              
-                    <p className="mt-3 border-t border-white/10 pt-3 text-sm leading-relaxed text-slate-300">
-                      <Users className="mr-2 inline text-amber-300" size={18} />
-                      As barras mostram publicações e a linha mostra o alcance estimado.
-                    </p>
-                  </Card>
-                  <AnalysisTextCard title={selectedPeriodAnalysis?.alcance_titulo || "Análise do alcance mês a mês"}>
-                    {selectedPeriodAnalysis?.alcance_texto ||
-                      "Análise não cadastrada para o período."}
-                  </AnalysisTextCard>
-                </div>
+                <AnalysisTextCard title={selectedPeriodAnalysis?.valoracao_titulo || "Análise da valoração mês a mês"}>
+                  {selectedPeriodAnalysis?.valoracao_texto ||
+                    "Análise não cadastrada para o período."}
+                </AnalysisTextCard>
               </section>
-
+              
+              <section className="mt-4 space-y-4">
+                <Card className="p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <SectionTitle>Alcance mês a mês</SectionTitle>
+                      <p className="mt-1 text-sm text-slate-400">
+                        Base Supabase · dados_mensais · histórico independente do filtro
+                      </p>
+                    </div>
+              
+                    <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs text-amber-100">
+                      Audiência
+                    </span>
+                  </div>
+              
+                  <div className="mt-4">
+                    <MonthlyComboChart
+                      data={monthlyWindow}
+                      lineDataKey="reach"
+                      lineLabel="Alcance"
+                      lineColor="#7bc9ff"
+                      lineValueFormatter={formatMillionsLabel}
+                      lineAxisFormatter={(v) => `${v}M`}
+                    />
+                  </div>
+              
+                  <p className="mt-3 border-t border-white/10 pt-3 text-sm leading-relaxed text-slate-300">
+                    <Users className="mr-2 inline text-amber-300" size={18} />
+                    As barras mostram publicações e a linha mostra o alcance estimado.
+                  </p>
+                </Card>
+              
+                <AnalysisTextCard title={selectedPeriodAnalysis?.alcance_titulo || "Análise do alcance mês a mês"}>
+                  {selectedPeriodAnalysis?.alcance_texto ||
+                    "Análise não cadastrada para o período."}
+                </AnalysisTextCard>
+              </section>
               
               <section className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <PublicationsValuationCard />
@@ -3991,64 +3989,62 @@ export default function PRDashboard() {
                 </Card>
               </section>
 
+              <section className="mt-4 space-y-4">
+                <Card className="p-5">
+                  <SectionTitle>Análise Qualitativa x Quantitativa</SectionTitle>
               
-              <section className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                <div className="space-y-4">
-                  <Card className="p-5">
-                    <SectionTitle>Análise Qualitativa x Quantitativa</SectionTitle>
+                  <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-[0.6fr_1.4fr]">
+                    <div className="rounded-xl border border-white/10 bg-slate-950/50 p-4">
+                      <p className="text-lg font-semibold text-amber-300">
+                        {dashboard.themes.length} temas/assuntos mapeados
+                      </p>
               
-                    <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-[0.85fr_1.4fr]">
-                      <div className="rounded-xl border border-white/10 bg-slate-950/50 p-4">
-                        <p className="text-lg font-semibold text-amber-300">
-                          {dashboard.themes.length} temas/assuntos mapeados
-                        </p>
+                      <p className="mt-2 text-sm leading-relaxed text-slate-300">
+                        A coluna “Assunto” alimenta o ranking. O destaque do período é {topTheme.name}.
+                      </p>
               
-                        <p className="mt-2 text-sm leading-relaxed text-slate-300">
-                          A coluna “Assunto” alimenta o ranking. O destaque do período é {topTheme.name}.
-                        </p>
-              
-                        <div className="mt-4 rounded-xl bg-slate-900/80 p-3 text-xs text-slate-300">
-                          Este bloco responde ao filtro de datas no topo.
-                        </div>
-                      </div>
-              
-                      <div className="h-52">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={dashboard.themes} margin={{ top: 5, right: 10, left: 0, bottom: 45 }}>
-                            <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-                            <XAxis
-                              dataKey="name"
-                              tick={{ fill: "#cbd5e1", fontSize: 10 }}
-                              interval={0}
-                              angle={-30}
-                              textAnchor="end"
-                              height={55}
-                            />
-                            <YAxis tick={{ fill: "#cbd5e1", fontSize: 12 }} />
-                            <Tooltip
-                              contentStyle={{
-                                background: "#081522",
-                                border: "1px solid rgba(255,255,255,.12)",
-                                borderRadius: 12,
-                              }}
-                            />
-                            <Bar dataKey="value" name="Publicações" fill="#c9d40b" radius={[5, 5, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
+                      <div className="mt-4 rounded-xl bg-slate-900/80 p-3 text-xs text-slate-300">
+                        Este bloco responde ao filtro de datas no topo.
                       </div>
                     </div>
-                  </Card>
-                  <AnalysisTextCard title={selectedPeriodAnalysis?.quali_quanti_titulo || "Análise quali e quanti"}>
-                    {selectedPeriodAnalysis?.quali_quanti_texto ||
-                      "Análise não cadastrada para o período."}
-                  </AnalysisTextCard>
-                </div>
+              
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={dashboard.themes} margin={{ top: 5, right: 10, left: 0, bottom: 45 }}>
+                          <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+                          <XAxis
+                            dataKey="name"
+                            tick={{ fill: "#cbd5e1", fontSize: 10 }}
+                            interval={0}
+                            angle={-30}
+                            textAnchor="end"
+                            height={55}
+                          />
+                          <YAxis tick={{ fill: "#cbd5e1", fontSize: 12 }} />
+                          <Tooltip
+                            contentStyle={{
+                              background: "#081522",
+                              border: "1px solid rgba(255,255,255,.12)",
+                              borderRadius: 12,
+                            }}
+                          />
+                          <Bar dataKey="value" name="Publicações" fill="#c9d40b" radius={[5, 5, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </Card>
+              
+                <AnalysisTextCard title={selectedPeriodAnalysis?.quali_quanti_titulo || "Análise quali e quanti"}>
+                  {selectedPeriodAnalysis?.quali_quanti_texto ||
+                    "Análise não cadastrada para o período."}
+                </AnalysisTextCard>
               
                 <Card className="p-5">
                   <SectionTitle>Análise dos Canais</SectionTitle>
               
-                  <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-[1.2fr_0.9fr]">
-                    <div className="h-52">
+                  <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-[1.4fr_0.8fr]">
+                    <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={dashboard.channels} layout="vertical" margin={{ top: 5, right: 25, left: 25, bottom: 5 }}>
                           <CartesianGrid stroke="rgba(255,255,255,0.08)" horizontal={false} />
@@ -4071,15 +4067,15 @@ export default function PRDashboard() {
                       </ResponsiveContainer>
                     </div>
               
-                    <div className="h-52">
+                    <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
                             data={dashboard.tiers}
                             dataKey="value"
                             nameKey="name"
-                            innerRadius={48}
-                            outerRadius={78}
+                            innerRadius={58}
+                            outerRadius={98}
                             paddingAngle={2}
                             label={({ value }) => `${value}%`}
                           >
@@ -4107,6 +4103,7 @@ export default function PRDashboard() {
                   </p>
                 </Card>
               </section>
+              
               <footer className="mt-8 border-t border-white/10 py-6 text-center">
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
                   XCOM by ATREVIA

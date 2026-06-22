@@ -602,6 +602,66 @@ function normalizeSupabaseMonthly(row) {
   };
 }
 
+
+function buildMonthlyWindowFromPeriod(monthlyData, startDate, endDate) {
+  if (!startDate || !endDate) {
+    return [...monthlyData].sort((a, b) =>
+      (a.sortKey || a.month).localeCompare(b.sortKey || b.month)
+    );
+  }
+
+  const startYear = Number(String(startDate).slice(0, 4));
+  const endYear = Number(String(endDate).slice(0, 4));
+  const startMonth = Number(String(startDate).slice(5, 7));
+  const endMonth = Number(String(endDate).slice(5, 7));
+
+  if (!startYear || !endYear || !startMonth || !endMonth) {
+    return [...monthlyData].sort((a, b) =>
+      (a.sortKey || a.month).localeCompare(b.sortKey || b.month)
+    );
+  }
+
+  const monthlyMap = new Map();
+
+  monthlyData.forEach((item) => {
+    if (item?.sortKey) {
+      monthlyMap.set(item.sortKey, item);
+    }
+  });
+
+  const result = [];
+
+  let year = startYear;
+  let month = startMonth;
+
+  while (year < endYear || (year === endYear && month <= endMonth)) {
+    const sortKey = `${year}-${String(month).padStart(2, "0")}`;
+    const existing = monthlyMap.get(sortKey);
+
+    result.push(
+      existing || {
+        sortKey,
+        month: `${monthNames[month - 1] || month}/${String(year).slice(-2)}`,
+        year,
+        monthNumber: month,
+        publications: 0,
+        mediaValue: 0,
+        reach: 0,
+      }
+    );
+
+    month += 1;
+
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+
+  return result;
+}
+
+
 function normalizeVehicle(row) {
   const vehicle =
     row.vehicle ||
@@ -3423,8 +3483,8 @@ export default function PRDashboard() {
   }, [filteredPublications]);
 
   const monthlyWindow = useMemo(
-    () => [...monthlyData].sort((a, b) => (a.sortKey || a.month).localeCompare(b.sortKey || b.month)).slice(-13),
-    [monthlyData]
+    () => buildMonthlyWindowFromPeriod(monthlyData, startDate, endDate),
+    [monthlyData, startDate, endDate]
   );
 
   const vehicleIndex = useMemo(() => buildVehicleIndex(vehicles), [vehicles]);

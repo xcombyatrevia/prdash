@@ -438,6 +438,19 @@ export default async function handler(req, res) {
       fetchRules(clientId),
     ]);
 
+    const { data: periodAnalyses, error: periodAnalysesError } = await supabase
+      .from("analises_periodo")
+      .select("*")
+      .eq("client_id", clientId)
+      .eq("status", "publicado")
+      .order("ano", { ascending: false })
+      .order("mes", { ascending: true });
+    
+    if (periodAnalysesError) {
+      throw new Error(`Erro ao carregar análises do período: ${periodAnalysesError.message}`);
+    }
+
+    
     return res.status(200).json({
       ok: true,
       source: "supabase",
@@ -455,6 +468,7 @@ export default async function handler(req, res) {
       monthlyData,
       vehicles,
       rules,
+      periodAnalyses: periodAnalyses || [],
 
       warnings: [],
     });

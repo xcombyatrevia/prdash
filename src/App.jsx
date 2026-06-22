@@ -938,18 +938,22 @@ function formatMillionsLabel(value) {
   })} M`;
 }
 
-const navItems = [
-  [Home, "Visão Geral"],
-  [Coins, "Valorações"],
-  [Sparkles, "Reputação"],
-  [TrendingUp, "Evolução"],
-  [PieIcon, "Análises"],
-  [Megaphone, "Canais"],
-  [Layers, "Temas"],
-  [BarChart3, "Benchmark"],
-  [FileText, "Relatórios"],
-  [Database, "Gestão de Dados"],
-  [Settings, "Configurações"],
+const navGroups = [
+  [
+    [Home, "Visão Geral"],
+    [Calendar, "Tivemos no mês"],
+    [Target, "Principal resultado"],
+    [Newspaper, "Destaques na Imprensa"],
+    [ClipboardList, "Próximos passos"],
+  ],
+  [
+    [Database, "Gestão de Dados"],
+    [Settings, "Configurações"],
+  ],
+  [
+    [Coins, "Valorações"],
+    [Sparkles, "Reputação"],
+  ],
 ];
 
 function Card({ children, className = "" }) {
@@ -3659,25 +3663,36 @@ export default function PRDashboard() {
               className="h-auto w-44 object-contain"
             />
           </button>
-        
-          <nav className="space-y-3">
-            {navItems.map(([Icon, label]) => {
-              const active = activePage === label;
-        
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => setActivePage(label)}
-                  className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-sm transition ${
-                    active ? "bg-amber-400/15 text-amber-200" : "text-slate-300 hover:bg-white/5 hover:text-white"
-                  }`}
-                >
-                  <Icon size={20} />
-                  <span>{label}</span>
-                </button>
-              );
-            })}
+                  
+          <nav className="space-y-5">
+            {navGroups.map((group, groupIndex) => (
+              <div
+                key={`nav-group-${groupIndex}`}
+                className={groupIndex > 0 ? "border-t border-white/10 pt-5" : ""}
+              >
+                <div className="space-y-3">
+                  {group.map(([Icon, label]) => {
+                    const active = activePage === label;
+          
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => setActivePage(label)}
+                        className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-sm transition ${
+                          active
+                            ? "bg-amber-400/15 text-amber-200"
+                            : "text-slate-300 hover:bg-white/5 hover:text-white"
+                        }`}
+                      >
+                        <Icon size={20} />
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
         </aside>
 

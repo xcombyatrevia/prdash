@@ -3950,7 +3950,7 @@ export default function PRDashboard() {
                         lineColor="#7bc9ff"
                         lineValueFormatter={formatMillionsLabel}
                         lineAxisFormatter={(v) => `${v}M`}
-                      />
+                      /> 
                     </div>
               
                     <p className="mt-3 border-t border-white/10 pt-3 text-sm leading-relaxed text-slate-300">

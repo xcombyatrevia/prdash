@@ -3162,6 +3162,7 @@ export default function PRDashboard() {
   const [monthlyData, setMonthlyData] = useState(FALLBACK_MONTHLY);
   const [vehicles, setVehicles] = useState([]);
   const [rules, setRules] = useState([]);
+  const [periodAnalyses, setPeriodAnalyses] = useState([]);
   const [startDate, setStartDate] = useState(defaultDateRange.startDate);
   const [endDate, setEndDate] = useState(defaultDateRange.endDate);
 
@@ -3267,11 +3268,11 @@ export default function PRDashboard() {
   
       setSelectedClientId(data.clientId);
       setSelectedClient(data.client || null);
-  
       setPublications(normalizedPublications);
       setMonthlyData(normalizedMonthly);
       setVehicles(normalizedVehicles);
       setRules(normalizedRules);
+      setPeriodAnalyses(data.periodAnalyses || []);
   
       if (!startDate || !endDate) {
         const latestRange = getLatestPublicationMonthRange(normalizedPublications);
@@ -3422,6 +3423,7 @@ export default function PRDashboard() {
     setMonthlyData([]);
     setVehicles([]);
     setRules([]);
+    setPeriodAnalyses([]);
     setLastUpdated("");
     setSelectedClientId("");
     setSelectedClient(null);
@@ -3515,6 +3517,26 @@ export default function PRDashboard() {
     () => buildMonthlyWindowFromPeriod(monthlyData, selectedYear, selectedMonth),
     [monthlyData, selectedYear, selectedMonth]
   );
+
+  const selectedPeriodAnalysis = useMemo(() => {
+    const year = Number(selectedYear);
+    const month = String(selectedMonth || "");
+  
+    const exact = periodAnalyses.find((item) => {
+      return Number(item.ano) === year && String(item.mes) === month;
+    });
+  
+    if (exact) return exact;
+  
+    const annual = periodAnalyses.find((item) => {
+      return Number(item.ano) === year && String(item.mes) === "all";
+    });
+  
+    if (annual) return annual;
+  
+    return null;
+  }, [periodAnalyses, selectedYear, selectedMonth]);
+  
 
   const vehicleIndex = useMemo(() => buildVehicleIndex(vehicles), [vehicles]);
 
@@ -3889,19 +3911,19 @@ export default function PRDashboard() {
               </section>
 
               <section className="mt-4">
-                <AnalysisTextCard title="Leitura geral dos resultados">
-                  Blablabla. Este espaço será usado para uma análise sintética dos principais números do período,
-                  destacando volume de publicações, alcance estimado, equivalência publicitária e concentração dos resultados.
+                <AnalysisTextCard title={selectedPeriodAnalysis?.leitura_geral_titulo || "Leitura geral dos resultados"}>
+                  {selectedPeriodAnalysis?.leitura_geral_texto ||
+                    "Análise não cadastrada para o período."}
                 </AnalysisTextCard>
               </section>
 
               <section className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <div className="space-y-4">
                   <ValuationMonthlyCard />
-              
-                  <AnalysisTextCard title="Análise da valoração mês a mês">
-                    Blablabla. Este espaço será usado para interpretar a evolução da equivalência publicitária no período,
-                    indicando altas, quedas, estabilidade e possíveis relações com volume de publicações.
+
+                  <AnalysisTextCard title={selectedPeriodAnalysis?.valoracao_titulo || "Análise da valoração mês a mês"}>
+                    {selectedPeriodAnalysis?.valoracao_texto ||
+                      "Análise não cadastrada para o período."}
                   </AnalysisTextCard>
                 </div>
               
@@ -3936,10 +3958,9 @@ export default function PRDashboard() {
                       As barras mostram publicações e a linha mostra o alcance estimado.
                     </p>
                   </Card>
-              
-                  <AnalysisTextCard title="Análise do alcance mês a mês">
-                    Blablabla. Este espaço será usado para comentar a evolução do alcance estimado,
-                    identificando meses de maior exposição e possíveis variações de audiência.
+                  <AnalysisTextCard title={selectedPeriodAnalysis?.alcance_titulo || "Análise do alcance mês a mês"}>
+                    {selectedPeriodAnalysis?.alcance_texto ||
+                      "Análise não cadastrada para o período."}
                   </AnalysisTextCard>
                 </div>
               </section>
@@ -4023,10 +4044,9 @@ export default function PRDashboard() {
                       </div>
                     </div>
                   </Card>
-              
-                  <AnalysisTextCard title="Análise quali e quanti">
-                    Blablabla. Este espaço será usado para conectar os dados quantitativos do período com a leitura qualitativa,
-                    destacando temas, canais, distribuição e principais interpretações estratégicas.
+                  <AnalysisTextCard title={selectedPeriodAnalysis?.quali_quanti_titulo || "Análise quali e quanti"}>
+                    {selectedPeriodAnalysis?.quali_quanti_texto ||
+                      "Análise não cadastrada para o período."}
                   </AnalysisTextCard>
                 </div>
               

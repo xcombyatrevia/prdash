@@ -998,6 +998,27 @@ function KpiCard({ icon: Icon, label, value, helper, accent = "cyan" }) {
     </Card>
   );
 }
+
+
+function AnalysisTextCard({ title, children }) {
+  return (
+    <Card className="p-5">
+      <p className="text-xs uppercase tracking-[0.25em] text-amber-300">
+        Análise
+      </p>
+
+      <h3 className="mt-2 font-serif text-xl text-white">
+        {title}
+      </h3>
+
+      <p className="mt-3 text-sm leading-relaxed text-slate-300">
+        {children}
+      </p>
+    </Card>
+  );
+}
+
+
 function MonthlyComboChart({ data, lineDataKey, lineLabel, lineColor, lineValueFormatter, lineAxisFormatter }) {
   return (
     <div className="h-64">
@@ -3867,55 +3888,87 @@ export default function PRDashboard() {
                 />
               </section>
 
-              <section className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                <ValuationMonthlyCard />
-
-                <Card className="p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <SectionTitle>Alcance mês a mês</SectionTitle>
-                      <p className="mt-1 text-sm text-slate-400">Base Supabase · dados_mensais · histórico independente do filtro</p>
-                    </div>
-                    <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs text-amber-100">
-                      Audiência
-                    </span>
-                  </div>
-
-                  <div className="mt-4">
-                    <MonthlyComboChart
-                      data={monthlyWindow}
-                      lineDataKey="reach"
-                      lineLabel="Alcance"
-                      lineColor="#7bc9ff"
-                      lineValueFormatter={formatMillionsLabel}
-                      lineAxisFormatter={(v) => `${v}M`}
-                    />
-                  </div>
-
-                  <p className="mt-3 border-t border-white/10 pt-3 text-sm leading-relaxed text-slate-300">
-                    <Users className="mr-2 inline text-amber-300" size={18} />
-                    As barras mostram publicações e a linha mostra o alcance estimado.
-                  </p>
-                </Card>
+              <section className="mt-4">
+                <AnalysisTextCard title="Leitura geral dos resultados">
+                  Blablabla. Este espaço será usado para uma análise sintética dos principais números do período,
+                  destacando volume de publicações, alcance estimado, equivalência publicitária e concentração dos resultados.
+                </AnalysisTextCard>
               </section>
 
               <section className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                <PublicationsValuationCard />
+                <div className="space-y-4">
+                  <ValuationMonthlyCard />
+              
+                  <AnalysisTextCard title="Análise da valoração mês a mês">
+                    Blablabla. Este espaço será usado para interpretar a evolução da equivalência publicitária no período,
+                    indicando altas, quedas, estabilidade e possíveis relações com volume de publicações.
+                  </AnalysisTextCard>
+                </div>
+              
+                <div className="space-y-4">
+                  <Card className="p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <SectionTitle>Alcance mês a mês</SectionTitle>
+                        <p className="mt-1 text-sm text-slate-400">
+                          Base Supabase · dados_mensais · histórico independente do filtro
+                        </p>
+                      </div>
+              
+                      <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs text-amber-100">
+                        Audiência
+                      </span>
+                    </div>
+              
+                    <div className="mt-4">
+                      <MonthlyComboChart
+                        data={monthlyWindow}
+                        lineDataKey="reach"
+                        lineLabel="Alcance"
+                        lineColor="#7bc9ff"
+                        lineValueFormatter={formatMillionsLabel}
+                        lineAxisFormatter={(v) => `${v}M`}
+                      />
+                    </div>
+              
+                    <p className="mt-3 border-t border-white/10 pt-3 text-sm leading-relaxed text-slate-300">
+                      <Users className="mr-2 inline text-amber-300" size={18} />
+                      As barras mostram publicações e a linha mostra o alcance estimado.
+                    </p>
+                  </Card>
+              
+                  <AnalysisTextCard title="Análise do alcance mês a mês">
+                    Blablabla. Este espaço será usado para comentar a evolução do alcance estimado,
+                    identificando meses de maior exposição e possíveis variações de audiência.
+                  </AnalysisTextCard>
+                </div>
+              </section>
 
+              
+              <section className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <PublicationsValuationCard />
+              
                 <Card className="p-5">
                   <SectionTitle>Distribuição Regional</SectionTitle>
+              
                   <div className="mt-4 h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={dashboard.topUFs} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                         <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
                         <XAxis dataKey="name" tick={{ fill: "#cbd5e1", fontSize: 12 }} />
                         <YAxis tick={{ fill: "#cbd5e1", fontSize: 12 }} />
-                        <Tooltip contentStyle={{ background: "#081522", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12 }} />
+                        <Tooltip
+                          contentStyle={{
+                            background: "#081522",
+                            border: "1px solid rgba(255,255,255,.12)",
+                            borderRadius: 12,
+                          }}
+                        />
                         <Bar dataKey="value" name="Publicações" fill="#70d6c9" radius={[6, 6, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-
+              
                   <p className="mt-3 border-t border-white/10 pt-3 text-sm leading-relaxed text-slate-300">
                     <Globe2 className="mr-2 inline text-cyan-300" size={18} />
                     Ranking por UF calculado a partir das publicações filtradas.
@@ -3923,49 +3976,87 @@ export default function PRDashboard() {
                 </Card>
               </section>
 
+              
               <section className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                <Card className="p-5">
-                  <SectionTitle>Análise Qualitativa x Quantitativa</SectionTitle>
-                  <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-[0.85fr_1.4fr]">
-                    <div className="rounded-xl border border-white/10 bg-slate-950/50 p-4">
-                      <p className="text-lg font-semibold text-amber-300">{dashboard.themes.length} temas/assuntos mapeados</p>
-                      <p className="mt-2 text-sm leading-relaxed text-slate-300">
-                        A coluna “Assunto” alimenta o ranking. O destaque do período é {topTheme.name}.
-                      </p>
-                      <div className="mt-4 rounded-xl bg-slate-900/80 p-3 text-xs text-slate-300">
-                        Este bloco responde ao filtro de datas no topo.
+                <div className="space-y-4">
+                  <Card className="p-5">
+                    <SectionTitle>Análise Qualitativa x Quantitativa</SectionTitle>
+              
+                    <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-[0.85fr_1.4fr]">
+                      <div className="rounded-xl border border-white/10 bg-slate-950/50 p-4">
+                        <p className="text-lg font-semibold text-amber-300">
+                          {dashboard.themes.length} temas/assuntos mapeados
+                        </p>
+              
+                        <p className="mt-2 text-sm leading-relaxed text-slate-300">
+                          A coluna “Assunto” alimenta o ranking. O destaque do período é {topTheme.name}.
+                        </p>
+              
+                        <div className="mt-4 rounded-xl bg-slate-900/80 p-3 text-xs text-slate-300">
+                          Este bloco responde ao filtro de datas no topo.
+                        </div>
+                      </div>
+              
+                      <div className="h-52">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={dashboard.themes} margin={{ top: 5, right: 10, left: 0, bottom: 45 }}>
+                            <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+                            <XAxis
+                              dataKey="name"
+                              tick={{ fill: "#cbd5e1", fontSize: 10 }}
+                              interval={0}
+                              angle={-30}
+                              textAnchor="end"
+                              height={55}
+                            />
+                            <YAxis tick={{ fill: "#cbd5e1", fontSize: 12 }} />
+                            <Tooltip
+                              contentStyle={{
+                                background: "#081522",
+                                border: "1px solid rgba(255,255,255,.12)",
+                                borderRadius: 12,
+                              }}
+                            />
+                            <Bar dataKey="value" name="Publicações" fill="#c9d40b" radius={[5, 5, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
                       </div>
                     </div>
-
-                    <div className="h-52">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={dashboard.themes} margin={{ top: 5, right: 10, left: 0, bottom: 45 }}>
-                          <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-                          <XAxis dataKey="name" tick={{ fill: "#cbd5e1", fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={55} />
-                          <YAxis tick={{ fill: "#cbd5e1", fontSize: 12 }} />
-                          <Tooltip contentStyle={{ background: "#081522", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12 }} />
-                          <Bar dataKey="value" name="Publicações" fill="#c9d40b" radius={[5, 5, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </Card>
-
+                  </Card>
+              
+                  <AnalysisTextCard title="Análise quali e quanti">
+                    Blablabla. Este espaço será usado para conectar os dados quantitativos do período com a leitura qualitativa,
+                    destacando temas, canais, distribuição e principais interpretações estratégicas.
+                  </AnalysisTextCard>
+                </div>
+              
                 <Card className="p-5">
                   <SectionTitle>Análise dos Canais</SectionTitle>
+              
                   <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-[1.2fr_0.9fr]">
                     <div className="h-52">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={dashboard.channels} layout="vertical" margin={{ top: 5, right: 25, left: 25, bottom: 5 }}>
                           <CartesianGrid stroke="rgba(255,255,255,0.08)" horizontal={false} />
                           <XAxis type="number" tick={{ fill: "#cbd5e1", fontSize: 12 }} />
-                          <YAxis type="category" dataKey="name" tick={{ fill: "#e2e8f0", fontSize: 12 }} width={100} />
-                          <Tooltip contentStyle={{ background: "#081522", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12 }} />
+                          <YAxis
+                            type="category"
+                            dataKey="name"
+                            tick={{ fill: "#e2e8f0", fontSize: 12 }}
+                            width={100}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              background: "#081522",
+                              border: "1px solid rgba(255,255,255,.12)",
+                              borderRadius: 12,
+                            }}
+                          />
                           <Bar dataKey="publications" name="Publicações" fill="#70d6c9" radius={[0, 6, 6, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
-
+              
                     <div className="h-52">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
@@ -3982,61 +4073,35 @@ export default function PRDashboard() {
                               <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip contentStyle={{ background: "#081522", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12 }} />
+              
+                          <Tooltip
+                            contentStyle={{
+                              background: "#081522",
+                              border: "1px solid rgba(255,255,255,.12)",
+                              borderRadius: 12,
+                            }}
+                          />
+              
                           <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
-
+              
                   <p className="mt-3 text-xs text-slate-400">
                     Total por canal exibido: {totalChannelPublications.toLocaleString("pt-BR")} publicações classificadas.
                   </p>
                 </Card>
               </section>
-
-              <section className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[1.3fr_0.7fr]">
-                <Card className="p-5">
-                  <SectionTitle>Principais leituras do período</SectionTitle>
-                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
-                    <div className="border-r border-white/10 pr-4">
-                      <TrendingUp className="mb-3 text-amber-300" />
-                      <p className="text-sm text-slate-300">{dashboard.kpis.publications} publicações no período filtrado.</p>
-                    </div>
-
-                    <div className="border-r border-white/10 pr-4">
-                      <Megaphone className="mb-3 text-amber-300" />
-                      <p className="text-sm text-slate-300">{topChannel.name} concentra o maior volume de inserções.</p>
-                    </div>
-
-                    <div className="border-r border-white/10 pr-4">
-                      <Target className="mb-3 text-amber-300" />
-                      <p className="text-sm text-slate-300">Tema de maior recorrência: {topTheme.name}.</p>
-                    </div>
-
-                    <div>
-                      <Globe2 className="mb-3 text-amber-300" />
-                      <p className="text-sm text-slate-300">UFs e canais são recalculados a cada alteração de período.</p>
-                    </div>
-                  </div>
-                </Card>
-
-                <Card className="p-5">
-                  <SectionTitle>Fontes atuais</SectionTitle>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {["Supabase · publicacoes", MONTHLY_SHEET, VEHICLES_SHEET, RULES_SHEET, "Google Sheets parcial"].map((field) => (
-                      <span key={field} className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs text-amber-100">
-                        {field}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="mt-4 text-xs uppercase tracking-wide text-slate-400">Registros carregados</p>
-                  <p className="mt-2 text-sm text-slate-300">
-                    {publications.length.toLocaleString("pt-BR")} publicações · {vehicles.length.toLocaleString("pt-BR")} veículos ·{" "}
-                    {rules.length.toLocaleString("pt-BR")} regras
-                  </p>
-                </Card>
-              </section>
+              <footer className="mt-8 border-t border-white/10 py-6 text-center">
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+                  XCOM by ATREVIA
+                </p>
+              
+                <p className="mt-2 text-sm text-slate-400">
+                  Relatório de resultados de mídia e reputação.
+                </p>
+              </footer>
             </>
           )}
         </main>

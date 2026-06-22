@@ -2185,7 +2185,7 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
       jobId,
     });
 
-    const response = await fetch(`/api/ai-analysis-job-status?${params.toString()}`);
+    const response = await fetch(`/api/ai-analysis-job?action=status&${params.toString()}`);
     const data = await readJsonResponse(response, "Erro ao consultar status da fila IA.");
 
     setAiJob(data.job || null);
@@ -2206,7 +2206,7 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
 
     if (recreate) params.set("recreate", "true");
 
-    const response = await fetch(`/api/ai-analysis-job-create?${params.toString()}`);
+    const response = await fetch(`/api/ai-analysis-job?action=create&${params.toString()}`);
     const data = await readJsonResponse(response, "Erro ao criar ou retomar fila IA.");
 
     setAiJob(data.job || null);
@@ -2238,7 +2238,7 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
       jobId,
     });
 
-    const response = await fetch(`/api/ai-analysis-job-process-next?${params.toString()}`);
+    const response = await fetch(`/api/ai-analysis-job?action=process-next&${params.toString()}`);
     const data = await readJsonResponse(response, "Erro ao processar próximo item da fila IA.");
 
     if (data.processedItem) {
@@ -2345,7 +2345,7 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
         jobId: aiJob.id,
       });
 
-      const response = await fetch(`/api/ai-analysis-job-reset-errors?${params.toString()}`);
+      const response = await fetch(`/api/ai-analysis-job?action=reset-errors&${params.toString()}`);
       await readJsonResponse(response, "Erro ao resetar erros da fila IA.");
       await loadAiJobStatus(aiJob.id);
     } catch (error) {

@@ -3522,22 +3522,16 @@ export default function PRDashboard() {
     const year = Number(selectedYear);
     const month = String(selectedMonth || "");
   
-    const exact = periodAnalyses.find((item) => {
-      return Number(item.ano) === year && String(item.mes) === month;
-    });
+    if (!year || !month) return null;
   
-    if (exact) return exact;
-  
-    const annual = periodAnalyses.find((item) => {
-      return Number(item.ano) === year && String(item.mes) === "all";
-    });
-  
-    if (annual) return annual;
-  
-    return null;
-  }, [periodAnalyses, selectedYear, selectedMonth]);
-  
+    return (
+      periodAnalyses.find((item) => {
+        return Number(item.ano) === year && String(item.mes) === month;
+      }) || null
+    );
+  }, [periodAnalyses, selectedYear, selectedMonth]);  
 
+  
   const vehicleIndex = useMemo(() => buildVehicleIndex(vehicles), [vehicles]);
 
   const valuationPublicationRows = useMemo(

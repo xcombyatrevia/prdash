@@ -92,6 +92,8 @@ const FALLBACK_MONTHLY = [
 ];
 
 const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const [tivemosMesBlocos, setTivemosMesBlocos] = useState([]);
+const [destaquesImprensa, setDestaquesImprensa] = useState([]);
 
 const MONTH_FILTER_OPTIONS = [
   { value: "01", label: "Janeiro" },
@@ -2187,6 +2189,307 @@ function TerritoryDataBlock({ data = null }) {
   );
 }
 
+function getPublicStorageUrl(path) {
+  if (!path) return "";
+
+  const value = String(path).trim();
+
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+  if (!supabaseUrl) return value;
+
+  return `${supabaseUrl}/storage/v1/object/public/press-highlights/${value}`;
+}
+
+function EmptyEditorialState({ title = "Conteúdo não cadastrado para o período." }) {
+  return (
+    <Card className="p-8 text-center">
+      <p className="text-sm text-slate-400">{title}</p>
+    </Card>
+  );
+}
+
+function TivemosNoMesPage({ blocks = [], selectedClient, selectedYear, selectedMonth }) {
+  const periodLabel =
+    selectedMonth === "all"
+      ? `Ano completo de ${selectedYear}`
+      : `${MONTH_FILTER_OPTIONS.find((item) => item.value === selectedMonth)?.label || "Mês"} de ${selectedYear}`;
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-6">
+        <p className="text-xs uppercase tracking-[0.3em] text-amber-300">
+          {selectedClient?.nome || selectedClient?.name || "Cliente"}
+        </p>
+
+        <h2 className="mt-3 font-serif text-4xl text-white">
+          Tivemos no mês
+        </h2>
+
+        <p className="mt-2 text-sm text-slate-400">
+          {periodLabel}
+        </p>
+      </Card>
+
+      {blocks.length === 0 ? (
+        <EmptyEditorialState />
+      ) : (
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {blocks.map((block) => {
+            const itens = Array.isArray(block.itens) ? block.itens : [];
+
+            return (
+              <Card key={block.id} className="flex min-h-[320px] flex-col p-5">
+                <div className="mb-5">
+                  <p className="font-serif text-5xl leading-none text-amber-300">
+                    {block.chapeu || "—"}
+                  </p>
+
+                  <h3 className="mt-3 text-xl font-semibold leading-tight text-white">
+                    {block.titulo}
+                  </h3>
+                </div>
+
+                {itens.length > 0 ? (
+                  <ul className="space-y-2 text-sm leading-relaxed text-slate-300">
+                    {itens.map((item, index) => (
+                      <li key={`${block.id}-${index}`} className="flex gap-2">
+                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm leading-relaxed text-slate-400">
+                    Conteúdo não cadastrado.
+                  </p>
+                )}
+              </Card>
+            );
+          })}
+        </section>
+      )}
+
+      <footer className="mt-8 border-t border-white/10 py-6 text-center">
+        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+          XCOM by ATREVIA
+        </p>
+      </footer>
+    </div>
+  );
+}
+
+function DestaqueImage({ src, alt, className = "" }) {
+  if (!src) {
+    return (
+      <div className={`flex items-center justify-center rounded-xl border border-white/10 bg-slate-950/60 text-xs text-slate-500 ${className}`}>
+        Imagem não cadastrada
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={`rounded-xl object-cover ${className}`}
+    />
+  );
+}
+
+function DestaquesImprensaPage({ highlights = [], selectedClient, selectedYear, selectedMonth }) {
+  const periodLabel =
+    selectedMonth === "all"
+      ? `Ano completo de ${selectedYear}`
+      : `${MONTH_FILTER_OPTIONS.find((item) => item.value === selectedMonth)?.label || "Mês"} de ${selectedYear}`;
+
+  const principal = highlights.find((item) => item.tipo === "principal");
+  const secundarios = highlights
+    .filter((item) => item.tipo === "secundario")
+    .slice(0, 6);
+
+  const principalImage = getPublicStorageUrl(principal?.imagem_path);
+  const principalLogo = getPublicStorageUrl(principal?.logo_path);
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-6">
+        <p className="text-xs uppercase tracking-[0.3em] text-amber-300">
+          {selectedClient?.nome || selectedClient?.name || "Cliente"}
+        </p>
+
+        <h2 className="mt-3 font-serif text-4xl text-white">
+          Destaques na Imprensa
+        </h2>
+
+        <p className="mt-2 text-sm text-slate-400">
+          {periodLabel}
+        </p>
+      </Card>
+
+      {!principal && secundarios.length === 0 ? (
+        <EmptyEditorialState />
+      ) : (
+        <>
+          {principal && (
+            <Card className="overflow-hidden p-5">
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1.15fr]">
+                <div className="flex flex-col justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.3em] text-cyan-300">
+                      Destaque principal
+                    </p>
+
+                    {principalLogo && (
+                      <img
+                        src={principalLogo}
+                        alt={principal.veiculo || "Logo do veículo"}
+                        className="mt-5 max-h-14 max-w-[220px] object-contain"
+                      />
+                    )}
+
+                    <h3 className="mt-6 font-serif text-3xl leading-tight text-white">
+                      {principal.titulo}
+                    </h3>
+
+                    {principal.data_publicacao && (
+                      <p className="mt-3 text-xs uppercase tracking-wide text-slate-500">
+                        {String(principal.data_publicacao).split("-").reverse().join("/")}
+                      </p>
+                    )}
+
+                    {principal.analise_texto && (
+                      <p className="mt-5 text-sm leading-relaxed text-slate-300">
+                        {principal.analise_texto}
+                      </p>
+                    )}
+
+                    {principal.comentario && (
+                      <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm leading-relaxed text-amber-50">
+                        {principal.comentario}
+                      </p>
+                    )}
+                  </div>
+
+                  {principal.url && (
+                    <a
+                      href={principal.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-6 inline-flex w-fit rounded-xl border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/15"
+                    >
+                      Abrir matéria
+                    </a>
+                  )}
+                </div>
+
+                <DestaqueImage
+                  src={principalImage}
+                  alt={principal.titulo}
+                  className="h-[360px] w-full"
+                />
+              </div>
+            </Card>
+          )}
+
+          <Card className="p-5">
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+              <div>
+                <SectionTitle>Destaques</SectionTitle>
+                <p className="mt-1 text-sm text-slate-400">
+                  Principais publicações selecionadas no período.
+                </p>
+              </div>
+            </div>
+
+            {secundarios.length === 0 ? (
+              <div className="mt-4">
+                <EmptyEditorialState title="Nenhum destaque secundário cadastrado para o período." />
+              </div>
+            ) : (
+              <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {secundarios.map((item) => {
+                  const logoUrl = getPublicStorageUrl(item.logo_path);
+                  const imageUrl = getPublicStorageUrl(item.imagem_path);
+
+                  return (
+                    <article
+                      key={item.id}
+                      className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/45"
+                    >
+                      <div className="flex h-16 items-center border-b border-white/10 px-4">
+                        {logoUrl ? (
+                          <img
+                            src={logoUrl}
+                            alt={item.veiculo || "Logo do veículo"}
+                            className="max-h-9 max-w-[150px] object-contain"
+                          />
+                        ) : (
+                          <p className="text-xs uppercase tracking-wide text-slate-500">
+                            {item.veiculo || "Veículo"}
+                          </p>
+                        )}
+                      </div>
+
+                      <DestaqueImage
+                        src={imageUrl}
+                        alt={item.titulo}
+                        className="h-44 w-full rounded-none"
+                      />
+
+                      <div className="p-4">
+                        {item.comentario && (
+                          <p className="text-sm leading-relaxed text-slate-300">
+                            {item.comentario}
+                          </p>
+                        )}
+
+                        <h3 className="mt-4 text-base font-semibold leading-snug text-white">
+                          {item.titulo}
+                        </h3>
+
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          {item.data_publicacao ? (
+                            <span className="text-xs text-slate-500">
+                              {String(item.data_publicacao).split("-").reverse().join("/")}
+                            </span>
+                          ) : (
+                            <span />
+                          )}
+
+                          {item.url && (
+                            <a
+                              href={item.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs font-medium text-cyan-200 hover:text-cyan-100"
+                            >
+                              Abrir
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </>
+      )}
+
+      <footer className="mt-8 border-t border-white/10 py-6 text-center">
+        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+          XCOM by ATREVIA
+        </p>
+      </footer>
+    </div>
+  );
+}
+
 function ReputationPage({ selectedClient, startDate, endDate }) {
   const [openMethodology, setOpenMethodology] = useState(null);
   const [reputationData, setReputationData] = useState(null);
@@ -3273,6 +3576,8 @@ export default function PRDashboard() {
       setVehicles(normalizedVehicles);
       setRules(normalizedRules);
       setPeriodAnalyses(data.periodAnalyses || []);
+      setTivemosMesBlocos(data.tivemosMesBlocos || []);
+      setDestaquesImprensa(data.destaquesImprensa || []);
   
       if (!startDate || !endDate) {
         const latestRange = getLatestPublicationMonthRange(normalizedPublications);
@@ -3427,6 +3732,8 @@ export default function PRDashboard() {
     setLastUpdated("");
     setSelectedClientId("");
     setSelectedClient(null);
+    setTivemosMesBlocos([]);
+    setDestaquesImprensa([]);
   }
 
   const yearOptions = useMemo(() => {
@@ -3531,7 +3838,28 @@ export default function PRDashboard() {
     );
   }, [periodAnalyses, selectedYear, selectedMonth]);  
 
+  const selectedTivemosMesBlocos = useMemo(() => {
+    const year = Number(selectedYear);
+    const month = String(selectedMonth || "");
   
+    if (!year || !month) return [];
+  
+    return tivemosMesBlocos
+      .filter((item) => Number(item.ano) === year && String(item.mes) === month)
+      .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0));
+  }, [tivemosMesBlocos, selectedYear, selectedMonth]);
+  
+  const selectedDestaquesImprensa = useMemo(() => {
+    const year = Number(selectedYear);
+    const month = String(selectedMonth || "");
+  
+    if (!year || !month) return [];
+  
+    return destaquesImprensa
+      .filter((item) => Number(item.ano) === year && String(item.mes) === month)
+      .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0));
+  }, [destaquesImprensa, selectedYear, selectedMonth]);
+
   const vehicleIndex = useMemo(() => buildVehicleIndex(vehicles), [vehicles]);
 
   const valuationPublicationRows = useMemo(
@@ -3848,9 +4176,28 @@ export default function PRDashboard() {
             </div>
           )}
 
-          {activePage === "Gestão de Dados" ? (
-            <DataManagementPage />
-          ) : activePage === "Reputação" ? (
+          {activePage === "Tivemos no mês" ? (
+            <TivemosNoMesPage blocks={selectedTivemosMesBlocos} />
+          ) : activePage === "Destaques na Imprensa" ? (
+            <DestaquesImprensaPage highlights={selectedDestaquesImprensa} />
+          ) : activePage === "Tivemos no mês" ? (
+              <TivemosNoMesPage
+                blocks={selectedTivemosMesBlocos}
+                selectedClient={selectedClient}
+                selectedYear={selectedYear}
+                selectedMonth={selectedMonth}
+              />
+            ) : activePage === "Destaques na Imprensa" ? (
+              <DestaquesImprensaPage
+                highlights={selectedDestaquesImprensa}
+                selectedClient={selectedClient}
+                selectedYear={selectedYear}
+                selectedMonth={selectedMonth}
+              />
+            ) : activePage === "Gestão de Dados" ? (
+              <DataManagementPage />
+            ) : activePage === "Reputação" ? (
+
             <ReputationPage
               selectedClient={selectedClient}
               startDate={startDate}

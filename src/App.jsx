@@ -92,8 +92,6 @@ const FALLBACK_MONTHLY = [
 ];
 
 const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-const [tivemosMesBlocos, setTivemosMesBlocos] = useState([]);
-const [destaquesImprensa, setDestaquesImprensa] = useState([]);
 
 const MONTH_FILTER_OPTIONS = [
   { value: "01", label: "Janeiro" },
@@ -3467,6 +3465,8 @@ export default function PRDashboard() {
   const [rules, setRules] = useState([]);
   const [periodAnalyses, setPeriodAnalyses] = useState([]);
   const [startDate, setStartDate] = useState(defaultDateRange.startDate);
+  const [tivemosMesBlocos, setTivemosMesBlocos] = useState([]);
+  const [destaquesImprensa, setDestaquesImprensa] = useState([]);
   const [endDate, setEndDate] = useState(defaultDateRange.endDate);
 
   const [selectedYear, setSelectedYear] = useState(() =>

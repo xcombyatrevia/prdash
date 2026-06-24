@@ -450,7 +450,37 @@ export default async function handler(req, res) {
       throw new Error(`Erro ao carregar análises do período: ${periodAnalysesError.message}`);
     }
 
+    const { data: tivemosMesBlocos, error: tivemosMesBlocosError } = await supabase
+      .from("tivemos_mes_blocos")
+      .select("*")
+      .eq("client_id", clientId)
+      .eq("status", "publicado")
+      .order("ano", { ascending: false })
+      .order("mes", { ascending: true })
+      .order("ordem", { ascending: true });
     
+    if (tivemosMesBlocosError) {
+      throw new Error(
+        `Erro ao carregar blocos de "Tivemos no mês": ${tivemosMesBlocosError.message}`
+      );
+    }
+    
+    const { data: destaquesImprensa, error: destaquesImprensaError } = await supabase
+      .from("destaques_imprensa")
+      .select("*")
+      .eq("client_id", clientId)
+      .eq("status", "publicado")
+      .order("ano", { ascending: false })
+      .order("mes", { ascending: true })
+      .order("tipo", { ascending: true })
+      .order("ordem", { ascending: true });
+    
+    if (destaquesImprensaError) {
+      throw new Error(
+        `Erro ao carregar destaques de imprensa: ${destaquesImprensaError.message}`
+      );
+    }
+        
     return res.status(200).json({
       ok: true,
       source: "supabase",
@@ -469,8 +499,9 @@ export default async function handler(req, res) {
       vehicles,
       rules,
       periodAnalyses: periodAnalyses || [],
-
       warnings: [],
+      tivemosMesBlocos: tivemosMesBlocos || [],
+      destaquesImprensa: destaquesImprensa || [],
     });
   } catch (error) {
     return res.status(500).json(

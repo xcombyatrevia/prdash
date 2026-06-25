@@ -3327,18 +3327,35 @@ function EditorialContentManager() {
     setIsSavingEditorial(true);
     setEditorialMessage("");
     setEditorialError("");
-
+  
     try {
+      console.log("SALVANDO ANALISES", {
+        action: "save-period-analysis",
+        payload: {
+          ...periodAnalysis,
+          client_id: clientId,
+          ano: year,
+          mes: month,
+        },
+      });
+  
       const result = await callEditorialContentApi("save-period-analysis", {
         ...periodAnalysis,
         client_id: clientId,
         ano: year,
         mes: month,
       });
-
-      setPeriodAnalysis(result);
+  
+      console.log("RESULTADO SALVAR ANALISES", result);
+  
+      setPeriodAnalysis({
+        ...createEmptyPeriodAnalysis(clientId, year, month),
+        ...result,
+      });
+  
       setEditorialMessage("Análises da Visão Geral salvas com sucesso.");
     } catch (error) {
+      console.error("ERRO AO SALVAR ANALISES", error);
       setEditorialError(error.message || "Erro ao salvar análises.");
     } finally {
       setIsSavingEditorial(false);

@@ -942,7 +942,6 @@ const navGroups = [
   [
     [Home, "Visão Geral"],
     [Calendar, "Tivemos no mês"],
-    [Target, "Principal resultado"],
     [Newspaper, "Destaques na Imprensa"],
     [ClipboardList, "Próximos passos"],
   ],

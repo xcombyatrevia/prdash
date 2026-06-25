@@ -2211,16 +2211,22 @@ function EmptyEditorialState({ title = "Conteúdo não cadastrado para o períod
 }
 
 function TivemosNoMesPage({ blocks = [], selectedClient, selectedYear, selectedMonth }) {
+  const selectedMonthLabel = MONTH_FILTER_OPTIONS.find(
+    (item) => item.value === String(selectedMonth)
+  )?.label;
+
   const periodLabel =
     selectedMonth === "all"
       ? `Ano completo de ${selectedYear}`
-      : `${MONTH_FILTER_OPTIONS.find((item) => item.value === selectedMonth)?.label || "Mês"} de ${selectedYear}`;
+      : selectedMonthLabel
+        ? `${selectedMonthLabel} de ${selectedYear}`
+        : `Período de ${selectedYear}`;
 
   return (
     <div className="space-y-4">
       <Card className="p-6">
         <p className="text-xs uppercase tracking-[0.3em] text-amber-300">
-          {selectedClient?.nome || selectedClient?.name || "Cliente"}
+          Ações
         </p>
 
         <h2 className="mt-3 font-serif text-4xl text-white">
@@ -2304,10 +2310,20 @@ function DestaquesImprensaPage({ highlights = [], selectedClient, selectedYear, 
       ? `Ano completo de ${selectedYear}`
       : `${MONTH_FILTER_OPTIONS.find((item) => item.value === selectedMonth)?.label || "Mês"} de ${selectedYear}`;
 
-  const principal = highlights.find((item) => item.tipo === "principal");
+  const normalizeHighlightType = (value) =>
+    removeAccents(String(value || "")).toLowerCase().trim();
+  
+  const principal = highlights.find((item) => {
+    return normalizeHighlightType(item.tipo) === "principal";
+  });
+  
   const secundarios = highlights
-    .filter((item) => item.tipo === "secundario")
+    .filter((item) => {
+      const tipo = normalizeHighlightType(item.tipo);
+      return tipo === "secundario" || tipo === "destaque";
+    })
     .slice(0, 6);
+  
 
   const principalImage = getPublicStorageUrl(principal?.imagem_path);
   const principalLogo = getPublicStorageUrl(principal?.logo_path);
@@ -2364,12 +2380,6 @@ function DestaquesImprensaPage({ highlights = [], selectedClient, selectedYear, 
                         {principal.analise_texto}
                       </p>
                     )}
-
-                    {principal.comentario && (
-                      <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm leading-relaxed text-amber-50">
-                        {principal.comentario}
-                      </p>
-                    )}
                   </div>
 
                   {principal.url && (
@@ -2404,10 +2414,11 @@ function DestaquesImprensaPage({ highlights = [], selectedClient, selectedYear, 
             </div>
 
             {secundarios.length === 0 ? (
-              <div className="mt-4">
-                <EmptyEditorialState title="Nenhum destaque secundário cadastrado para o período." />
-              </div>
+              <p className="mt-5 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-8 text-center text-sm text-slate-400">
+                Nenhum destaque secundário cadastrado para o período.
+              </p>
             ) : (
+          
               <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {secundarios.map((item) => {
                   const logoUrl = getPublicStorageUrl(item.logo_path);

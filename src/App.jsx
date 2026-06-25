@@ -2392,7 +2392,7 @@ function DestaquesImprensaPage({ highlights = [], selectedClient, selectedYear, 
                       Abrir matéria
                     </a>
                   )}
-                </div>
+                </div> 
 
                 <DestaqueImage
                   src={principalImage}

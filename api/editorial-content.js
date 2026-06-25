@@ -88,9 +88,8 @@ async function getAuthenticatedUser(req) {
 
 function assertEditorUser(user) {
   const email = String(user?.email || "").toLowerCase();
-  const domain = email.split("@")[1];
 
-  if (!email || !ALLOWED_EDITOR_DOMAINS.includes(domain)) {
+  if (!ALLOWED_EDITOR_EMAILS.includes(email)) {
     throw new Error("Usuário sem permissão para editar conteúdo editorial.");
   }
 }

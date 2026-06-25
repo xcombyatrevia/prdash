@@ -3110,6 +3110,715 @@ function ReputationPage({ selectedClient, startDate, endDate }) {
     </div>
   );
 }
+
+function createEmptyPeriodAnalysis(clientId, year, month) {
+  return {
+    client_id: clientId,
+    ano: year,
+    mes: month,
+    leitura_geral_titulo: "Leitura geral dos resultados",
+    leitura_geral_texto: "",
+    valoracao_titulo: "Análise da valoração mês a mês",
+    valoracao_texto: "",
+    alcance_titulo: "Análise do alcance mês a mês",
+    alcance_texto: "",
+    quali_quanti_titulo: "Análise quali e quanti",
+    quali_quanti_texto: "",
+    status: "publicado",
+  };
+}
+
+function createEmptyMonthBlock(clientId, year, month, order) {
+  return {
+    id: "",
+    client_id: clientId,
+    ano: year,
+    mes: month,
+    ordem: order,
+    chapeu: "",
+    titulo: "",
+    itensText: "",
+    status: "publicado",
+  };
+}
+
+function createEmptyPressHighlight(clientId, year, month, type, order) {
+  return {
+    id: "",
+    client_id: clientId,
+    ano: year,
+    mes: month,
+    tipo: type,
+    ordem: order,
+    veiculo: "",
+    titulo: "",
+    comentario: "",
+    analise_texto: "",
+    data_publicacao: "",
+    url: "",
+    status: "publicado",
+  };
+}
+
+async function callEditorialContentApi(action, payload) {
+  const { data: sessionData, error: sessionError } =
+    await supabaseBrowser.auth.getSession();
+
+  if (sessionError || !sessionData?.session?.access_token) {
+    throw new Error("Sessão expirada. Faça login novamente.");
+  }
+
+  const response = await fetch(`/api/editorial-content?action=${action}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionData.session.access_token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || !data.ok) {
+    throw new Error(data.error || "Erro ao salvar conteúdo editorial.");
+  }
+
+  return data.result;
+}
+
+function EditorialContentManager() {
+  const currentYear = new Date().getFullYear();
+
+  const [clientId, setClientId] = useState("cliente_x");
+  const [year, setYear] = useState(currentYear);
+  const [month, setMonth] = useState("03");
+  const [activeTab, setActiveTab] = useState("analises");
+
+  const [periodAnalysis, setPeriodAnalysis] = useState(() =>
+    createEmptyPeriodAnalysis("cliente_x", currentYear, "03")
+  );
+
+  const [monthBlocks, setMonthBlocks] = useState(() =>
+    [1, 2, 3, 4].map((order) =>
+      createEmptyMonthBlock("cliente_x", currentYear, "03", order)
+    )
+  );
+
+  const [pressHighlights, setPressHighlights] = useState(() => [
+    createEmptyPressHighlight("cliente_x", currentYear, "03", "principal", 1),
+    ...[1, 2, 3, 4, 5, 6].map((order) =>
+      createEmptyPressHighlight("cliente_x", currentYear, "03", "secundario", order)
+    ),
+  ]);
+
+  const [isLoadingEditorial, setIsLoadingEditorial] = useState(false);
+  const [isSavingEditorial, setIsSavingEditorial] = useState(false);
+  const [editorialMessage, setEditorialMessage] = useState("");
+  const [editorialError, setEditorialError] = useState("");
+
+  const selectedClient =
+    CLIENT_OPTIONS.find((client) => client.id === clientId) || CLIENT_OPTIONS[0];
+
+  function resetEmptyForms(nextClientId = clientId, nextYear = year, nextMonth = month) {
+    setPeriodAnalysis(createEmptyPeriodAnalysis(nextClientId, nextYear, nextMonth));
+
+    setMonthBlocks(
+      [1, 2, 3, 4].map((order) =>
+        createEmptyMonthBlock(nextClientId, nextYear, nextMonth, order)
+      )
+    );
+
+    setPressHighlights([
+      createEmptyPressHighlight(nextClientId, nextYear, nextMonth, "principal", 1),
+      ...[1, 2, 3, 4, 5, 6].map((order) =>
+        createEmptyPressHighlight(nextClientId, nextYear, nextMonth, "secundario", order)
+      ),
+    ]);
+  }
+
+  function handleEditorialPeriodChange({ nextClientId = clientId, nextYear = year, nextMonth = month }) {
+    setClientId(nextClientId);
+    setYear(Number(nextYear));
+    setMonth(nextMonth);
+    resetEmptyForms(nextClientId, Number(nextYear), nextMonth);
+    setEditorialMessage("");
+    setEditorialError("");
+  }
+
+  async function loadEditorialContent() {
+    setIsLoadingEditorial(true);
+    setEditorialMessage("");
+    setEditorialError("");
+
+    try {
+      const response = await fetch(
+        `/api/get-dashboard-data?clientId=${encodeURIComponent(clientId)}`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Erro ao carregar dados editoriais.");
+      }
+
+      const selectedPeriodAnalysis =
+        (data.periodAnalyses || []).find((item) => {
+          return Number(item.ano) === Number(year) && String(item.mes) === String(month);
+        }) || null;
+
+      setPeriodAnalysis(
+        selectedPeriodAnalysis
+          ? {
+              ...createEmptyPeriodAnalysis(clientId, year, month),
+              ...selectedPeriodAnalysis,
+            }
+          : createEmptyPeriodAnalysis(clientId, year, month)
+      );
+
+      const loadedMonthBlocks = (data.tivemosMesBlocos || [])
+        .filter((item) => Number(item.ano) === Number(year) && String(item.mes) === String(month))
+        .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0));
+
+      setMonthBlocks(
+        [1, 2, 3, 4].map((order) => {
+          const existing = loadedMonthBlocks.find((item) => Number(item.ordem) === order);
+
+          if (!existing) {
+            return createEmptyMonthBlock(clientId, year, month, order);
+          }
+
+          return {
+            ...createEmptyMonthBlock(clientId, year, month, order),
+            ...existing,
+            itensText: Array.isArray(existing.itens)
+              ? existing.itens.join("\n")
+              : "",
+          };
+        })
+      );
+
+      const loadedHighlights = (data.destaquesImprensa || [])
+        .filter((item) => Number(item.ano) === Number(year) && String(item.mes) === String(month))
+        .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0));
+
+      const principal =
+        loadedHighlights.find((item) => item.tipo === "principal") ||
+        createEmptyPressHighlight(clientId, year, month, "principal", 1);
+
+      const secundarios = [1, 2, 3, 4, 5, 6].map((order) => {
+        return (
+          loadedHighlights.find(
+            (item) => item.tipo === "secundario" && Number(item.ordem) === order
+          ) || createEmptyPressHighlight(clientId, year, month, "secundario", order)
+        );
+      });
+
+      setPressHighlights([principal, ...secundarios]);
+
+      setEditorialMessage("Conteúdo carregado para edição.");
+    } catch (error) {
+      setEditorialError(error.message || "Erro ao carregar conteúdo editorial.");
+    } finally {
+      setIsLoadingEditorial(false);
+    }
+  }
+
+  async function savePeriodAnalysis() {
+    setIsSavingEditorial(true);
+    setEditorialMessage("");
+    setEditorialError("");
+
+    try {
+      const result = await callEditorialContentApi("save-period-analysis", {
+        ...periodAnalysis,
+        client_id: clientId,
+        ano: year,
+        mes: month,
+      });
+
+      setPeriodAnalysis(result);
+      setEditorialMessage("Análises da Visão Geral salvas com sucesso.");
+    } catch (error) {
+      setEditorialError(error.message || "Erro ao salvar análises.");
+    } finally {
+      setIsSavingEditorial(false);
+    }
+  }
+
+  async function saveMonthBlock(block) {
+    setIsSavingEditorial(true);
+    setEditorialMessage("");
+    setEditorialError("");
+
+    try {
+      const result = await callEditorialContentApi("save-month-block", {
+        ...block,
+        client_id: clientId,
+        ano: year,
+        mes: month,
+        itens: block.itensText,
+      });
+
+      setMonthBlocks((current) =>
+        current.map((item) =>
+          Number(item.ordem) === Number(block.ordem)
+            ? {
+                ...item,
+                ...result,
+                itensText: Array.isArray(result.itens) ? result.itens.join("\n") : "",
+              }
+            : item
+        )
+      );
+
+      setEditorialMessage(`Bloco ${block.ordem} salvo com sucesso.`);
+    } catch (error) {
+      setEditorialError(error.message || "Erro ao salvar bloco.");
+    } finally {
+      setIsSavingEditorial(false);
+    }
+  }
+
+  async function savePressHighlight(highlight) {
+    setIsSavingEditorial(true);
+    setEditorialMessage("");
+    setEditorialError("");
+
+    try {
+      const result = await callEditorialContentApi("save-press-highlight", {
+        ...highlight,
+        client_id: clientId,
+        ano: year,
+        mes: month,
+      });
+
+      setPressHighlights((current) =>
+        current.map((item) =>
+          item.tipo === highlight.tipo && Number(item.ordem) === Number(highlight.ordem)
+            ? {
+                ...item,
+                ...result,
+              }
+            : item
+        )
+      );
+
+      setEditorialMessage(
+        highlight.tipo === "principal"
+          ? "Destaque principal salvo com sucesso."
+          : `Destaque ${highlight.ordem} salvo com sucesso.`
+      );
+    } catch (error) {
+      setEditorialError(error.message || "Erro ao salvar destaque.");
+    } finally {
+      setIsSavingEditorial(false);
+    }
+  }
+
+  function updateMonthBlock(order, field, value) {
+    setMonthBlocks((current) =>
+      current.map((block) =>
+        Number(block.ordem) === Number(order)
+          ? { ...block, [field]: value }
+          : block
+      )
+    );
+  }
+
+  function updatePressHighlight(type, order, field, value) {
+    setPressHighlights((current) =>
+      current.map((highlight) =>
+        highlight.tipo === type && Number(highlight.ordem) === Number(order)
+          ? { ...highlight, [field]: value }
+          : highlight
+      )
+    );
+  }
+
+  const principalHighlight = pressHighlights.find((item) => item.tipo === "principal");
+  const secondaryHighlights = pressHighlights.filter((item) => item.tipo === "secundario");
+
+  return (
+    <Card className="p-5">
+      <div className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <SectionTitle>Conteúdo editorial do relatório</SectionTitle>
+          <p className="mt-1 text-sm text-slate-400">
+            Edite análises, ações do mês e destaques de imprensa por cliente e período.
+          </p>
+        </div>
+
+        <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs text-amber-100">
+          Textos · fase 1
+        </span>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-[220px_160px_180px_auto]">
+        <label className="text-sm text-slate-300">
+          Cliente
+          <select
+            value={clientId}
+            onChange={(event) =>
+              handleEditorialPeriodChange({ nextClientId: event.target.value })
+            }
+            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+          >
+            {CLIENT_OPTIONS.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="text-sm text-slate-300">
+          Ano
+          <input
+            type="number"
+            value={year}
+            onChange={(event) =>
+              handleEditorialPeriodChange({ nextYear: event.target.value })
+            }
+            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+          />
+        </label>
+
+        <label className="text-sm text-slate-300">
+          Mês
+          <select
+            value={month}
+            onChange={(event) =>
+              handleEditorialPeriodChange({ nextMonth: event.target.value })
+            }
+            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+          >
+            {MONTH_FILTER_OPTIONS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={loadEditorialContent}
+            disabled={isLoadingEditorial}
+            className="w-full rounded-xl border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/15 disabled:opacity-50"
+          >
+            {isLoadingEditorial ? "Carregando..." : "Carregar conteúdo"}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {[
+          ["analises", "Análises"],
+          ["tivemos", "Tivemos no mês"],
+          ["destaques", "Destaques na imprensa"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setActiveTab(key)}
+            className={`rounded-full px-4 py-2 text-sm transition ${
+              activeTab === key
+                ? "bg-amber-300/15 text-amber-100"
+                : "border border-white/10 bg-slate-950/40 text-slate-300 hover:bg-white/5"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {editorialError && (
+        <div className="mt-4 rounded-xl border border-red-300/20 bg-red-300/10 px-4 py-3 text-sm text-red-100">
+          {editorialError}
+        </div>
+      )}
+
+      {editorialMessage && (
+        <div className="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm text-emerald-100">
+          {editorialMessage}
+        </div>
+      )}
+
+      {activeTab === "analises" && (
+        <div className="mt-5 space-y-4">
+          {[
+            ["leitura_geral", "Leitura geral dos resultados"],
+            ["valoracao", "Análise da valoração mês a mês"],
+            ["alcance", "Análise do alcance mês a mês"],
+            ["quali_quanti", "Análise quali e quanti"],
+          ].map(([key, label]) => (
+            <div key={key} className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+              <label className="text-sm text-slate-300">
+                Título · {label}
+                <input
+                  value={periodAnalysis[`${key}_titulo`] || ""}
+                  onChange={(event) =>
+                    setPeriodAnalysis((current) => ({
+                      ...current,
+                      [`${key}_titulo`]: event.target.value,
+                    }))
+                  }
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+                />
+              </label>
+
+              <label className="mt-3 block text-sm text-slate-300">
+                Texto
+                <textarea
+                  value={periodAnalysis[`${key}_texto`] || ""}
+                  onChange={(event) =>
+                    setPeriodAnalysis((current) => ({
+                      ...current,
+                      [`${key}_texto`]: event.target.value,
+                    }))
+                  }
+                  rows={4}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm leading-relaxed text-white outline-none"
+                />
+              </label>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={savePeriodAnalysis}
+            disabled={isSavingEditorial}
+            className="rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-300/15 disabled:opacity-50"
+          >
+            {isSavingEditorial ? "Salvando..." : "Salvar análises"}
+          </button>
+        </div>
+      )}
+
+      {activeTab === "tivemos" && (
+        <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {monthBlocks.map((block) => (
+            <div key={block.ordem} className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Bloco {block.ordem}
+              </p>
+
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[120px_1fr]">
+                <label className="text-sm text-slate-300">
+                  Chapéu
+                  <input
+                    value={block.chapeu || ""}
+                    onChange={(event) =>
+                      updateMonthBlock(block.ordem, "chapeu", event.target.value)
+                    }
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+                  />
+                </label>
+
+                <label className="text-sm text-slate-300">
+                  Título
+                  <input
+                    value={block.titulo || ""}
+                    onChange={(event) =>
+                      updateMonthBlock(block.ordem, "titulo", event.target.value)
+                    }
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+                  />
+                </label>
+              </div>
+
+              <label className="mt-3 block text-sm text-slate-300">
+                Itens, um por linha
+                <textarea
+                  value={block.itensText || ""}
+                  onChange={(event) =>
+                    updateMonthBlock(block.ordem, "itensText", event.target.value)
+                  }
+                  rows={7}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm leading-relaxed text-white outline-none"
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={() => saveMonthBlock(block)}
+                disabled={isSavingEditorial}
+                className="mt-4 rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-300/15 disabled:opacity-50"
+              >
+                Salvar bloco {block.ordem}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activeTab === "destaques" && (
+        <div className="mt-5 space-y-4">
+          {principalHighlight && (
+            <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-4">
+              <p className="text-xs uppercase tracking-wide text-cyan-200">
+                Destaque principal
+              </p>
+
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="text-sm text-slate-300">
+                  Veículo
+                  <input
+                    value={principalHighlight.veiculo || ""}
+                    onChange={(event) =>
+                      updatePressHighlight("principal", 1, "veiculo", event.target.value)
+                    }
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+                  />
+                </label>
+
+                <label className="text-sm text-slate-300">
+                  Data
+                  <input
+                    type="date"
+                    value={principalHighlight.data_publicacao || ""}
+                    onChange={(event) =>
+                      updatePressHighlight("principal", 1, "data_publicacao", event.target.value)
+                    }
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+                  />
+                </label>
+              </div>
+
+              <label className="mt-3 block text-sm text-slate-300">
+                Título
+                <input
+                  value={principalHighlight.titulo || ""}
+                  onChange={(event) =>
+                    updatePressHighlight("principal", 1, "titulo", event.target.value)
+                  }
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+                />
+              </label>
+
+              <label className="mt-3 block text-sm text-slate-300">
+                Análise
+                <textarea
+                  value={principalHighlight.analise_texto || ""}
+                  onChange={(event) =>
+                    updatePressHighlight("principal", 1, "analise_texto", event.target.value)
+                  }
+                  rows={5}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm leading-relaxed text-white outline-none"
+                />
+              </label>
+
+              <label className="mt-3 block text-sm text-slate-300">
+                URL
+                <input
+                  value={principalHighlight.url || ""}
+                  onChange={(event) =>
+                    updatePressHighlight("principal", 1, "url", event.target.value)
+                  }
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={() => savePressHighlight(principalHighlight)}
+                disabled={isSavingEditorial}
+                className="mt-4 rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-300/15 disabled:opacity-50"
+              >
+                Salvar destaque principal
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {secondaryHighlights.map((highlight) => (
+              <div key={highlight.ordem} className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  Destaque secundário {highlight.ordem}
+                </p>
+
+                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label className="text-sm text-slate-300">
+                    Veículo
+                    <input
+                      value={highlight.veiculo || ""}
+                      onChange={(event) =>
+                        updatePressHighlight("secundario", highlight.ordem, "veiculo", event.target.value)
+                      }
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+                    />
+                  </label>
+
+                  <label className="text-sm text-slate-300">
+                    Data
+                    <input
+                      type="date"
+                      value={highlight.data_publicacao || ""}
+                      onChange={(event) =>
+                        updatePressHighlight("secundario", highlight.ordem, "data_publicacao", event.target.value)
+                      }
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+                    />
+                  </label>
+                </div>
+
+                <label className="mt-3 block text-sm text-slate-300">
+                  Título
+                  <input
+                    value={highlight.titulo || ""}
+                    onChange={(event) =>
+                      updatePressHighlight("secundario", highlight.ordem, "titulo", event.target.value)
+                    }
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+                  />
+                </label>
+
+                <label className="mt-3 block text-sm text-slate-300">
+                  Comentário curto
+                  <textarea
+                    value={highlight.comentario || ""}
+                    onChange={(event) =>
+                      updatePressHighlight("secundario", highlight.ordem, "comentario", event.target.value)
+                    }
+                    rows={3}
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm leading-relaxed text-white outline-none"
+                  />
+                </label>
+
+                <label className="mt-3 block text-sm text-slate-300">
+                  URL
+                  <input
+                    value={highlight.url || ""}
+                    onChange={(event) =>
+                      updatePressHighlight("secundario", highlight.ordem, "url", event.target.value)
+                    }
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => savePressHighlight(highlight)}
+                  disabled={isSavingEditorial}
+                  className="mt-4 rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-300/15 disabled:opacity-50"
+                >
+                  Salvar destaque {highlight.ordem}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="mt-5 border-t border-white/10 pt-4 text-xs leading-relaxed text-slate-500">
+        Após salvar, clique em “Carregar dados” no dashboard para atualizar as abas públicas do relatório.
+      </p>
+    </Card>
+  );
+}
+
+
 function DataManagementPage() {
   const [selectedClientId, setSelectedClientId] = useState("cliente_x");
   const [sheetName, setSheetName] = useState("CLIENTEX");
@@ -3461,8 +4170,10 @@ async function requestUploadValidation(mode) {
           </div>
         </Card>
       )}
+      <EditorialContentManager />
     </div>
   );
+  
 }
 
 export default function PRDashboard() {

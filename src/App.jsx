@@ -2210,16 +2210,19 @@ function EmptyEditorialState({ title = "Conteúdo não cadastrado para o períod
 }
 
 function TivemosNoMesPage({ blocks = [], selectedClient, selectedYear, selectedMonth }) {
+  const selectedMonthValue = String(selectedMonth || "");
+  const selectedYearValue = selectedYear || new Date().getFullYear();
+
   const selectedMonthLabel = MONTH_FILTER_OPTIONS.find(
-    (item) => item.value === String(selectedMonth)
+    (item) => item.value === selectedMonthValue
   )?.label;
 
   const periodLabel =
-    selectedMonth === "all"
-      ? `Ano completo de ${selectedYear}`
+    selectedMonthValue === "all"
+      ? `Ano completo de ${selectedYearValue}`
       : selectedMonthLabel
-        ? `${selectedMonthLabel} de ${selectedYear}`
-        : `Período de ${selectedYear}`;
+        ? `${selectedMonthLabel} de ${selectedYearValue}`
+        : `Período selecionado`;
 
   return (
     <div className="space-y-4">
@@ -4185,12 +4188,29 @@ export default function PRDashboard() {
               <AlertCircle size={18} /> {loadError}
             </div>
           )}
-
           {activePage === "Tivemos no mês" ? (
-            <TivemosNoMesPage blocks={selectedTivemosMesBlocos} />
+            <TivemosNoMesPage
+              blocks={selectedTivemosMesBlocos}
+              selectedClient={selectedClient}
+              selectedYear={selectedYear}
+              selectedMonth={selectedMonth}
+            />
           ) : activePage === "Destaques na Imprensa" ? (
             <DestaquesImprensaPage highlights={selectedDestaquesImprensa} />
           ) : activePage === "Tivemos no mês" ? (
+
+          {activePage === "Tivemos no mês" ? (
+            <TivemosNoMesPage
+              blocks={selectedTivemosMesBlocos}
+              selectedClient={selectedClient}
+              selectedYear={selectedYear}
+              selectedMonth={selectedMonth}
+            />
+          ) : activePage === "Destaques na Imprensa" ? (
+
+
+
+      
               <TivemosNoMesPage
                 blocks={selectedTivemosMesBlocos}
                 selectedClient={selectedClient}

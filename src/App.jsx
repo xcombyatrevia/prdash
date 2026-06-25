@@ -4188,6 +4188,7 @@ export default function PRDashboard() {
               <AlertCircle size={18} /> {loadError}
             </div>
           )}
+          
           {activePage === "Tivemos no mês" ? (
             <TivemosNoMesPage
               blocks={selectedTivemosMesBlocos}
@@ -4196,38 +4197,15 @@ export default function PRDashboard() {
               selectedMonth={selectedMonth}
             />
           ) : activePage === "Destaques na Imprensa" ? (
-            <DestaquesImprensaPage highlights={selectedDestaquesImprensa} />
-          ) : activePage === "Tivemos no mês" ? (
-
-          {activePage === "Tivemos no mês" ? (
-            <TivemosNoMesPage
-              blocks={selectedTivemosMesBlocos}
+            <DestaquesImprensaPage
+              highlights={selectedDestaquesImprensa}
               selectedClient={selectedClient}
               selectedYear={selectedYear}
               selectedMonth={selectedMonth}
             />
-          ) : activePage === "Destaques na Imprensa" ? (
-
-
-
-      
-              <TivemosNoMesPage
-                blocks={selectedTivemosMesBlocos}
-                selectedClient={selectedClient}
-                selectedYear={selectedYear}
-                selectedMonth={selectedMonth}
-              />
-            ) : activePage === "Destaques na Imprensa" ? (
-              <DestaquesImprensaPage
-                highlights={selectedDestaquesImprensa}
-                selectedClient={selectedClient}
-                selectedYear={selectedYear}
-                selectedMonth={selectedMonth}
-              />
-            ) : activePage === "Gestão de Dados" ? (
-              <DataManagementPage />
-            ) : activePage === "Reputação" ? (
-
+          ) : activePage === "Gestão de Dados" ? (
+            <DataManagementPage />
+          ) : activePage === "Reputação" ? (
             <ReputationPage
               selectedClient={selectedClient}
               startDate={startDate}

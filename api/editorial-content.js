@@ -7,7 +7,7 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 const ALLOWED_EDITOR_EMAILS = [
   "digital_2@xcom.net.br",
-  "sui.comunic@gamil.com"
+  "sui.comunic@gmail.com"
 ];
 
 function sendJson(res, status, payload) {

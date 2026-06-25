@@ -5,7 +5,10 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-const ALLOWED_EDITOR_DOMAINS = ["xcom.net.br"];
+const ALLOWED_EDITOR_EMAILS = [
+  "digital_2@xcom.net.br",
+  "sui.comunic@gamil.com"
+];
 
 function sendJson(res, status, payload) {
   return res.status(status).json(payload);

@@ -2533,10 +2533,19 @@ function ProximosPassosPage({ selectedPeriodAnalysis }) {
         </h2>
       </Card>
 
-      <AnalysisTextCard title="Recomendações para o próximo ciclo">
-        {selectedPeriodAnalysis?.proximos_passos_texto ||
-          "Conteúdo não cadastrado para o período."}
-      </AnalysisTextCard>
+      <Card className="p-8">
+        <div className="prose prose-invert prose-slate max-w-none">
+          {selectedPeriodAnalysis?.proximos_passos_texto ? (
+            <p className="whitespace-pre-line text-base leading-8 text-slate-200">
+              {selectedPeriodAnalysis.proximos_passos_texto}
+            </p>
+          ) : (
+            <p className="text-slate-500">
+              Conteúdo não cadastrado para o período.
+            </p>
+          )}
+        </div>
+      </Card>
 
       <footer className="mt-8 border-t border-white/10 py-6 text-center">
         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">

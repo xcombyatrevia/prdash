@@ -116,6 +116,8 @@ async function savePeriodAnalysis(body) {
     quali_quanti_titulo: normalizeString(body.quali_quanti_titulo),
     quali_quanti_texto: normalizeString(body.quali_quanti_texto),
     status: normalizeStatus(body.status),
+    proximos_passos_titulo: body.proximos_passos_titulo || "Novos passos a implementar",
+    proximos_passos_texto: body.proximos_passos_texto || "",
   };
 
   const { data, error } = await supabaseAdmin

@@ -2520,6 +2520,33 @@ function DestaquesImprensaPage({ highlights = [], selectedClient, selectedYear, 
   );
 }
 
+function ProximosPassosPage({ selectedPeriodAnalysis }) {
+  return (
+    <div className="space-y-4">
+      <Card className="p-6">
+        <p className="text-xs uppercase tracking-[0.3em] text-amber-300">
+          Planejamento
+        </p>
+
+        <h2 className="mt-3 font-serif text-4xl text-white">
+          {selectedPeriodAnalysis?.proximos_passos_titulo || "Novos passos a implementar"}
+        </h2>
+      </Card>
+
+      <AnalysisTextCard title="Recomendações para o próximo ciclo">
+        {selectedPeriodAnalysis?.proximos_passos_texto ||
+          "Conteúdo não cadastrado para o período."}
+      </AnalysisTextCard>
+
+      <footer className="mt-8 border-t border-white/10 py-6 text-center">
+        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+          XCOM by ATREVIA
+        </p>
+      </footer>
+    </div>
+  );
+}
+
 function ReputationPage({ selectedClient, startDate, endDate }) {
   const [openMethodology, setOpenMethodology] = useState(null);
   const [reputationData, setReputationData] = useState(null);
@@ -3647,6 +3674,7 @@ function EditorialContentManager() {
             ["valoracao", "Análise da valoração mês a mês"],
             ["alcance", "Análise do alcance mês a mês"],
             ["quali_quanti", "Análise quali e quanti"],
+            ["proximos_passos", "Novos passos a implementar"],
           ].map(([key, label]) => (
             <div key={key} className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
               <label className="text-sm text-slate-300">
@@ -5044,6 +5072,8 @@ export default function PRDashboard() {
               selectedYear={selectedYear}
               selectedMonth={selectedMonth}
             />
+          ) : activePage === "Próximos passos" ? (
+            <ProximosPassosPage selectedPeriodAnalysis={selectedPeriodAnalysis} />
           ) : activePage === "Gestão de Dados" ? (
             <DataManagementPage />
           ) : activePage === "Reputação" ? (

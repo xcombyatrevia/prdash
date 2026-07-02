@@ -222,8 +222,8 @@ async function savePressHighlight(body) {
     data_publicacao: normalizeString(body.data_publicacao) || null,
     url: normalizeString(body.url) || null,
     status: normalizeStatus(body.status),
-    imagem_path,
-    logo_path,
+    imagem_path: body.imagem_path || null,
+    logo_path: body.logo_path || null,
   };
 
   if (!payload.titulo) {

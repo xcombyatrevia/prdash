@@ -3143,6 +3143,8 @@ function createEmptyPeriodAnalysis(clientId, year, month) {
     alcance_texto: "",
     quali_quanti_titulo: "Análise quali e quanti",
     quali_quanti_texto: "",
+    proximos_passos_titulo: "Novos passos a implementar",
+    proximos_passos_texto: "",
     status: "publicado",
   };
 }

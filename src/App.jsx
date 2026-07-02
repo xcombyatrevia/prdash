@@ -1010,9 +1010,9 @@ function AnalysisTextCard({ title, children }) {
         {title}
       </h3>
 
-      <p className="mt-3 text-sm leading-relaxed text-slate-300">
+      <div className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-300">
         {children}
-      </p>
+      </div>
     </Card>
   );
 }
@@ -2536,9 +2536,9 @@ function ProximosPassosPage({ selectedPeriodAnalysis }) {
       <Card className="p-8">
         <div className="prose prose-invert prose-slate max-w-none">
           {selectedPeriodAnalysis?.proximos_passos_texto ? (
-            <p className="whitespace-pre-line text-base leading-8 text-slate-200">
-              {selectedPeriodAnalysis.proximos_passos_texto}
-            </p>
+            <div className="whitespace-pre-line text-base leading-8 text-slate-200">
+              {selectedPeriodAnalysis?.proximos_passos_texto}
+            </div>
           ) : (
             <p className="text-slate-500">
               Conteúdo não cadastrado para o período.

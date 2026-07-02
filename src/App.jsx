@@ -2201,6 +2201,25 @@ function getPublicStorageUrl(path) {
   return data?.publicUrl || "";
 }
 
+function getHighlightImagePath({ clientId, year, month, type, order, file }) {
+  const extension = String(file?.name || "")
+    .split(".")
+    .pop()
+    ?.toLowerCase() || "webp";
+
+  const safeMonth = String(month).padStart(2, "0");
+
+  const fileName =
+    type === "principal"
+      ? `principal.${extension}`
+      : `secundario_${String(order).padStart(2, "0")}.${extension}`;
+
+  return `editorial/${clientId}/${year}/${safeMonth}/${fileName}`;
+}
+
+
+
+
 function EmptyEditorialState({ title = "Conteúdo não cadastrado para o período." }) {
   return (
     <Card className="p-8 text-center">
@@ -3396,30 +3415,65 @@ function EditorialContentManager() {
     }
   }
 
+  async function uploadPressHighlightImage(highlight, file) {
+    if (!file) return highlight.imagem_path || "";
+  
+    const path = getHighlightImagePath({
+      clientId,
+      year,
+      month,
+      type: highlight.tipo,
+      order: highlight.ordem,
+      file,
+    });
+  
+    const { error } = await supabaseBrowser.storage
+      .from("assets")
+      .upload(path, file, {
+        upsert: true,
+        contentType: file.type,
+      });
+  
+    if (error) {
+      throw new Error(error.message || "Erro ao subir imagem.");
+    }
+  
+    return path;
+  }
+
+  
   async function savePressHighlight(highlight) {
     setIsSavingEditorial(true);
     setEditorialMessage("");
     setEditorialError("");
-
+  
     try {
+      const imagemPath = await uploadPressHighlightImage(
+        highlight,
+        highlight.selectedImageFile
+      );
+  
       const result = await callEditorialContentApi("save-press-highlight", {
         ...highlight,
+        imagem_path: imagemPath || highlight.imagem_path || "",
+        selectedImageFile: undefined,
         client_id: clientId,
         ano: year,
         mes: month,
       });
-
+  
       setPressHighlights((current) =>
         current.map((item) =>
           item.tipo === highlight.tipo && Number(item.ordem) === Number(highlight.ordem)
             ? {
                 ...item,
                 ...result,
+                selectedImageFile: null,
               }
             : item
         )
       );
-
+  
       setEditorialMessage(
         highlight.tipo === "principal"
           ? "Destaque principal salvo com sucesso."
@@ -3737,6 +3791,24 @@ function EditorialContentManager() {
                 />
               </label>
 
+              <label className="mt-3 block text-sm text-slate-300">
+                Imagem do destaque
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) =>
+                    updatePressHighlight(
+                      "principal",
+                      1,
+                      "selectedImageFile",
+                      event.target.files?.[0] || null
+                    )
+                  }
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 file:mr-4 file:rounded-lg file:border-0 file:bg-cyan-300/10 file:px-3 file:py-2 file:text-cyan-100"
+                />
+              </label>
+
+              
               <button
                 type="button"
                 onClick={() => savePressHighlight(principalHighlight)}
@@ -3814,6 +3886,23 @@ function EditorialContentManager() {
                   />
                 </label>
 
+                <label className="mt-3 block text-sm text-slate-300">
+                  Imagem do destaque
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) =>
+                      updatePressHighlight(
+                        "secundario",
+                        highlight.ordem,
+                        "selectedImageFile",
+                        event.target.files?.[0] || null
+                      )
+                    }
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-200 file:mr-4 file:rounded-lg file:border-0 file:bg-cyan-300/10 file:px-3 file:py-2 file:text-cyan-100"
+                  />
+                </label>
+                
                 <button
                   type="button"
                   onClick={() => savePressHighlight(highlight)}

@@ -3489,10 +3489,12 @@ function EditorialContentManager() {
       );
   
       setEditorialMessage(
-        highlight.tipo === "principal"
-          ? "Destaque principal salvo com sucesso."
-          : `Destaque ${highlight.ordem} salvo com sucesso.`
+        imagemPath
+          ? `Destaque ${highlight.tipo === "principal" ? "principal" : highlight.ordem} salvo com imagem: ${imagemPath}`
+          : `Destaque ${highlight.tipo === "principal" ? "principal" : highlight.ordem} salvo sem nova imagem.`
       );
+
+      
     } catch (error) {
       setEditorialError(error.message || "Erro ao salvar destaque.");
     } finally {

@@ -3439,20 +3439,26 @@ function EditorialContentManager() {
       file,
     });
   
-    const response = await supabaseBrowser.storage
+    const { data, error } = await supabaseBrowser.storage
       .from("assets")
       .upload(path, file, {
         upsert: true,
         contentType: file.type,
       });
   
-    if (response.error) {
+    if (error) {
       throw new Error(
-        `Upload falhou. Path: ${path}. Erro: ${response.error.message}`
+        `Upload falhou. Path: ${path}. Erro: ${error.message}`
       );
     }
   
-    return path;
+    if (!data?.path) {
+      throw new Error(
+        `Upload não confirmado pelo Storage. Path esperado: ${path}`
+      );
+    }
+  
+    return data.path;
   }
 
   

@@ -3427,17 +3427,25 @@ function EditorialContentManager() {
       file,
     });
   
-    const { error } = await supabaseBrowser.storage
+    const response = await supabaseBrowser.storage
       .from("assets")
       .upload(path, file, {
         upsert: true,
         contentType: file.type,
       });
-  
-    if (error) {
-      throw new Error(error.message || "Erro ao subir imagem.");
+    
+    console.log("UPLOAD RESPONSE", response);
+    
+    if (response.error) {
+      console.error(response.error);
+    
+      throw new Error(
+        JSON.stringify(response.error, null, 2)
+      );
     }
-  
+    
+
+    
     return path;
   }
 

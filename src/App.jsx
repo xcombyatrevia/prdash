@@ -3418,6 +3418,18 @@ function EditorialContentManager() {
   async function uploadPressHighlightImage(highlight, file) {
     if (!file) return highlight.imagem_path || "";
   
+    if (!clientId || !year || !month) {
+      throw new Error(
+        `Dados do período ausentes. clientId=${clientId}, year=${year}, month=${month}`
+      );
+    }
+  
+    if (!highlight?.tipo || !highlight?.ordem) {
+      throw new Error(
+        `Dados do destaque ausentes. tipo=${highlight?.tipo}, ordem=${highlight?.ordem}`
+      );
+    }
+  
     const path = getHighlightImagePath({
       clientId,
       year,
@@ -3433,19 +3445,13 @@ function EditorialContentManager() {
         upsert: true,
         contentType: file.type,
       });
-    
-    console.log("UPLOAD RESPONSE", response);
-    
+  
     if (response.error) {
-      console.error(response.error);
-    
       throw new Error(
-        JSON.stringify(response.error, null, 2)
+        `Upload falhou. Path: ${path}. Erro: ${response.error.message}`
       );
     }
-    
-
-    
+  
     return path;
   }
 

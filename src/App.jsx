@@ -2194,11 +2194,11 @@ function getPublicStorageUrl(path) {
   if (!value) return "";
   if (value.startsWith("http://") || value.startsWith("https://")) return value;
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const { data } = supabaseBrowser.storage
+    .from("assets")
+    .getPublicUrl(value);
 
-  if (!supabaseUrl) return value;
-
-  return `${supabaseUrl}/storage/v1/object/public/press-highlights/${value}`;
+  return data?.publicUrl || "";
 }
 
 function EmptyEditorialState({ title = "Conteúdo não cadastrado para o período." }) {
